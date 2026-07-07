@@ -133,3 +133,28 @@ including in your own forks and internal tools. Keep the copyright notice.
 
 Built as a Claude Cowork live artifact. Not affiliated with or endorsed by Atlassian. “Jira” is a
 trademark of Atlassian.
+
+---
+
+## Screenshots
+
+A per‑tab walkthrough with copy‑ready descriptions lives in [DESCRIPTION.md](DESCRIPTION.md).
+Data shown below is from a demo Jira instance.
+
+### 1 · Portfolio Health
+
+Multi‑project scorecards — completion donut, status split, and per‑type panels (Epics, Stories, Tasks, Bugs) for each selected project.
+
+![Portfolio Health tab](jira-portfolio-health.png)
+
+### 2 · Product Backlog Health
+
+Flow health for one project — completion, created vs. resolved throughput, cumulative flow trend, and release progress by Fix Version.
+
+![Product Backlog Health tab](jira-backlog-health.png)
+
+### 3 · Sprint Health
+
+A single sprint in detail — active‑sprint hero, completion, on‑track read, velocity forecast, burndown, and the work‑items table.
+
+![Sprint Health tab](jira-sprint-health.png)
