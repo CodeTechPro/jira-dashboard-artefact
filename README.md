@@ -107,10 +107,6 @@ example, to run it as a standalone web page outside Cowork). In that case:
    // Authorization: 'Basic ' + btoa(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`)
    ```
 
-   > ⚠️ Browsers block cross‑origin calls to `*.atlassian.net`, and Basic‑auth tokens embedded in a
-   > public page are visible to anyone. For a real standalone app, proxy Jira through a small backend
-   > and keep the token as a **server‑side environment variable** — never in front‑end code.
-
 ---
 
 ## Customizing
