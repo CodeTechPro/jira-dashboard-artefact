@@ -92,20 +92,6 @@ The connector tools this dashboard uses (declared in `cowork-artifact-meta`):
 
 ---
 
-## License
-
-Released under the [MIT License](LICENSE) — you're free to use, modify, and redistribute it,
-including in your own forks and internal tools. Keep the copyright notice.
-
----
-
-## Credits
-
-Built as a Claude Cowork live artifact. Not affiliated with or endorsed by Atlassian. “Jira” is a
-trademark of Atlassian.
-
----
-
 ## Screenshots
 
 A per‑tab walkthrough with copy‑ready descriptions lives in [DESCRIPTION.md](Live%20Artefact/DESCRIPTION.md).
@@ -128,3 +114,10 @@ Flow health for one project — completion, created vs. resolved throughput, cum
 A single sprint in detail — active‑sprint hero, completion, on‑track read, velocity forecast, burndown, and the work‑items table.
 
 ![Sprint Health tab](Screenshot/jira-sprint-health.png)
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE) — you're free to use, modify, and redistribute it,
+including in your own forks and internal tools. Keep the copyright notice.
