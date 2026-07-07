@@ -1,0 +1,11 @@
+# Local, configured copies — never commit
+*.local.html
+.env
+.env.*
+secrets.*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

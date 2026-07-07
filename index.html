@@ -1,0 +1,3354 @@
+<!DOCTYPE html>
+<!--
+  Ultimate Jira Projects Dashboard - PUBLIC / SANITIZED COPY
+  Replace these placeholders with your own Jira values before use (see README.md):
+    YOUR_CLOUD_ID               -> your Atlassian Cloud ID (UUID)
+    your-company.atlassian.net  -> your Jira site host
+    YOUR_CONNECTOR_ID           -> your connected Atlassian connector id (mcp__<id>__...)
+  Do NOT commit real credentials to a public repo.
+-->
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Ultimate Jira Projects Dashboard",
+  "schemaVersion": 1,
+  "description": "Unified live Jira dashboard with three drill-down levels \u2014 Portfolio health (multi-project scorecards), Product Backlog health (flow, fix-version release progress, lead/cycle time), and Sprint health (active sprint hero, burndown, velocity forecast, work items). Shared header with an Atlassian Jira connection badge, left-aligned level tabs, and a consistent left-aligned controls card on every tab. Click-to-drill from a portfolio project into its backlog or sprint, carrying the selected project across levels. Each level is CSS-isolated in its own Shadow DOM view. Live data via the Atlassian connector (your-company).",
+  "mcpTools": [
+    "mcp__YOUR_CONNECTOR_ID__getAccessibleAtlassianResources",
+    "mcp__YOUR_CONNECTOR_ID__getVisibleJiraProjects",
+    "mcp__YOUR_CONNECTOR_ID__searchJiraIssuesUsingJql",
+    "mcp__YOUR_CONNECTOR_ID__getJiraIssue"
+  ],
+  "mcpServerNames": [
+    "Atlassian",
+    "Atlassian",
+    "Atlassian",
+    "Atlassian"
+  ]
+}
+</script>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ultimate Jira Projects Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f6fb; --surface:#ffffff; --border:#e3e8f0; --border-strong:#d3dbe8;
+  --text:#0b1f44; --text-muted:#5b6b8c; --text-soft:#8390ad;
+  --primary:#1d4ed8; --primary-600:#1746c3; --primary-50:#eaf0ff; --navy:#0b1f44; --navy-2:#102a5e;
+  --good:#16a34a; --danger:#dc2626; --warn:#d97706;
+  --shadow-sm:0 1px 2px rgba(11,31,68,.06); --shadow-md:0 4px 12px rgba(11,31,68,.08);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+.app{max-width:1320px;margin:0 auto;padding:0 28px;}
+.app-head{padding:22px 0 16px;border-bottom:1px solid var(--border);}
+.head-top{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px;}
+.app-title{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--navy);line-height:1.1;}
+
+/* connection badge */
+.conn-badge{display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 6px 5px 13px;box-shadow:var(--shadow-sm);font-size:13px;flex-shrink:0;}
+.conn-brand{display:inline-flex;align-items:center;gap:7px;font-weight:700;color:var(--primary);}
+.conn-brand svg{width:14px;height:14px;}
+.conn-div{width:1px;height:15px;background:var(--border);}
+.conn-dot{width:9px;height:9px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background .2s;}
+.conn-label{font-weight:600;color:var(--text-muted);}
+.conn-badge[data-state="connected"] .conn-dot{background:var(--good);box-shadow:0 0 0 3px rgba(22,163,74,.16);}
+.conn-badge[data-state="connected"] .conn-label{color:var(--good);}
+.conn-badge[data-state="checking"] .conn-dot{background:var(--warn);}
+.conn-badge[data-state="disconnected"] .conn-dot{background:var(--danger);box-shadow:0 0 0 3px rgba(220,38,38,.16);}
+.conn-badge[data-state="disconnected"] .conn-label{color:var(--danger);}
+.conn-reconnect{font:inherit;font-size:12px;font-weight:700;cursor:pointer;border:none;border-radius:999px;padding:5px 12px;background:var(--primary);color:#fff;}
+.conn-reconnect:hover{background:var(--primary-600);}
+
+/* level tabs — left aligned */
+.levelnav{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:5px;gap:4px;box-shadow:var(--shadow-sm);max-width:100%;flex-wrap:wrap;}
+.levelnav button{font:inherit;cursor:pointer;border:1px solid transparent;background:transparent;border-radius:9px;padding:9px 14px;display:inline-flex;align-items:center;gap:9px;color:var(--text-muted);transition:background .15s,color .15s;}
+.levelnav button:hover{background:var(--primary-50);color:var(--primary);}
+.levelnav button.active,.levelnav button.active:hover{background:var(--navy);color:#fff;}
+.lvl-num{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:var(--primary-50);color:var(--primary);flex-shrink:0;}
+.levelnav button.active .lvl-num{background:rgba(255,255,255,0.2);color:#fff;}
+.lvl-t{font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;}
+
+.app-body{padding-top:4px;}
+.view{display:block;}
+.view[hidden]{display:none;}
+@media(max-width:720px){.app{padding:0 16px;} .lvl-t{font-size:13px;}}
+</style>
+<template id="tpl-portfolio"><style>
+:host {
+  color-scheme: light;
+  display:block;
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#0b1f44;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --border: #e3e8f0;
+  --border-strong: #d3dbe8;
+  --text: #0b1f44;
+  --text-muted: #5b6b8c;
+  --text-soft: #8390ad;
+  --primary: #1d4ed8;
+  --primary-600: #1746c3;
+  --primary-50: #eaf0ff;
+  --navy: #0b1f44;
+  --navy-2: #102a5e;
+  --good: #16a34a;
+  --good-bg: #dcfce7;
+  --warn: #d97706;
+  --warn-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --info: #2563eb;
+  --info-bg: #dbeafe;
+  --gray: #cbd5e1;
+  --gray-bg: #eef1f7;
+  --gray-pill-text: #4a5878;
+  --shadow-sm: 0 1px 2px rgba(11, 31, 68, 0.06);
+  --shadow-md: 0 4px 12px rgba(11, 31, 68, 0.08);
+  --shadow-lg: 0 12px 28px rgba(11, 31, 68, 0.14);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.container { padding: 24px 28px 56px; max-width: 1320px; margin: 0 auto; }
+
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 24px; margin-bottom: 22px; flex-wrap: wrap;
+}
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--navy); }
+.subtitle { color: var(--text-muted); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.subtitle .dot-sep { width: 4px; height: 4px; background: var(--text-soft); border-radius: 50%; display: inline-block; }
+.brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 14px; color: var(--primary);
+  background: var(--primary-50); padding: 4px 10px; border-radius: 6px;
+}
+.brand svg { width: 14px; height: 14px; }
+
+.toolbar { display: flex; align-items: center; gap: 8px; }
+.btn {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 9px 14px; border-radius: 8px; border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.btn:disabled { opacity: 0.55; cursor: wait; }
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover:not(:disabled) { background: var(--primary-600); }
+.btn-ghost { background: var(--surface); color: var(--primary); border-color: var(--border-strong); }
+.btn-ghost:hover:not(:disabled) { background: var(--primary-50); border-color: var(--primary); }
+.btn-link {
+  background: transparent; color: var(--primary); border: none;
+  padding: 6px 8px; font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.btn-link:hover { text-decoration: underline; }
+
+.picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.picker-head {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+.picker-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--text-soft); text-transform: uppercase;
+}
+.picker-meta { color: var(--text-muted); font-size: 13px; font-weight: 500; margin-left: auto; }
+
+.dropdown { position: relative; display: inline-block; }
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 240px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.dropdown-trigger:hover { border-color: var(--primary); }
+.dropdown-trigger.open {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
+.dropdown-trigger .dt-label { color: var(--text); font-weight: 500; }
+.dropdown-trigger .dt-pill {
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+.dropdown-chevron {
+  width: 14px; height: 14px;
+  color: var(--text-muted);
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+.dropdown-trigger.open .dropdown-chevron { transform: rotate(180deg); }
+
+.dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 320px;
+  width: max-content;
+  max-width: 460px;
+  max-height: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dropdown-panel.open { display: flex; }
+.dropdown-search {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.dropdown-search input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  background: var(--gray-bg);
+}
+.dropdown-search input:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
+.dropdown-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px;
+}
+.dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.dropdown-option:hover { background: var(--gray-bg); }
+.dropdown-option .opt-check {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface);
+  transition: all .12s;
+}
+.dropdown-option .opt-check svg {
+  width: 11px; height: 11px;
+  color: transparent;
+  transition: color .12s;
+}
+.dropdown-option.selected .opt-check {
+  background: var(--primary); border-color: var(--primary);
+}
+.dropdown-option.selected .opt-check svg { color: #fff; }
+.dropdown-option .opt-name {
+  flex: 1; color: var(--text); font-size: 13px; font-weight: 500;
+  white-space: nowrap;
+}
+.dropdown-option .opt-key {
+  font-family: "SF Mono", "Monaco", "Menlo", monospace;
+  font-size: 11px; color: var(--text-muted);
+  background: var(--gray-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.dropdown-option.selected .opt-name { color: var(--text); }
+.dropdown-empty {
+  padding: 18px; text-align: center; color: var(--text-soft);
+  font-size: 13px; font-style: italic;
+}
+
+.status-bar {
+  background: var(--primary-50);
+  color: var(--primary);
+  border: 1px solid #c5d3f5;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.error-bar {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f5c6c0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px; font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.scorecards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 18px;
+}
+@media (max-width: 720px) { .scorecards { grid-template-columns: 1fr; } }
+
+.scorecard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.sc-head {
+  position: relative;
+  padding: 18px 20px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top right, rgba(96,165,250,0.22) 0%, rgba(96,165,250,0) 55%),
+    linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.sc-name-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sc-name {
+  margin: 0; font-size: 18px; font-weight: 700;
+  color: #fff; letter-spacing: -0.01em; line-height: 1.25;
+}
+.sc-key {
+  font-family: "SF Mono", "Monaco", "Menlo", monospace;
+  font-size: 12px; font-weight: 600;
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.95);
+  padding: 2px 8px; border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.sc-meta-row {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  font-size: 12px; color: rgba(255,255,255,0.72);
+}
+.sc-meta-item { display: inline-flex; align-items: center; gap: 5px; }
+.sc-meta-item svg { width: 13px; height: 13px; opacity: 0.8; }
+.sc-meta-item strong { color: #fff; font-weight: 700; }
+
+.type-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.tb-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  padding: 3px 9px 3px 4px;
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.95);
+}
+.tb-badge .itype { width: 18px; height: 18px; border-radius: 4px; }
+.tb-badge .itype svg { width: 11px; height: 11px; }
+
+.cap-warn {
+  font-size: 11px; color: #fde68a; font-weight: 700;
+  background: rgba(217,119,6,0.28);
+  border: 1px solid rgba(253,224,71,0.35);
+  padding: 2px 8px; border-radius: 4px;
+  display: inline-block;
+}
+
+.sc-overview {
+  display: flex; align-items: center; gap: 18px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.sc-stats { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.stat-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 8px;
+  background: var(--gray-bg);
+  font-size: 13px;
+}
+.stat-row .swatch {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.stat-row .swatch.done { background: var(--good); }
+.stat-row .swatch.inprog { background: var(--info); }
+.stat-row .swatch.todo { background: var(--gray); }
+/* Bumped from 500 → 600 for better readability of the status labels */
+.stat-row .label { color: var(--text-muted); flex: 1; font-weight: 600; }
+.stat-row .num { font-weight: 700; color: var(--text); display: inline-flex; align-items: baseline; gap: 6px; }
+.stat-row .num .pct {
+  font-weight: 500; color: var(--text-muted); font-size: 12px;
+}
+
+.sc-types {
+  padding: 16px 18px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.type-block {
+  background: var(--gray-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 168px;
+}
+.tb-head { display: flex; align-items: center; gap: 8px; }
+.tb-head .itype { width: 24px; height: 24px; border-radius: 5px; }
+.tb-head .itype svg { width: 13px; height: 13px; }
+.tb-name {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.tb-total {
+  margin-left: auto;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 2px 8px; border-radius: 999px;
+}
+.tb-body {
+  display: flex; align-items: center; gap: 12px;
+  flex: 1;
+}
+.tb-counts { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.tb-cnt {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted);
+}
+.tb-cnt .swatch {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.tb-cnt strong { color: var(--text); font-weight: 700; min-width: 16px; text-align: right; }
+.tb-cnt .pct {
+  color: var(--text-soft); font-weight: 500; font-size: 11px;
+  margin-left: -2px;
+}
+/* Bumped to 600 so "Done / In Progress / To Do" labels read clearly inside the type panels */
+.tb-cnt .lbl { margin-left: 2px; font-weight: 600; color: var(--text-muted); }
+.tb-empty {
+  font-size: 12px; color: var(--text-soft);
+  font-style: italic;
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  padding: 8px 12px;
+}
+
+.donut-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.donut-sublabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.itype { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.itype svg { color: #fff; }
+.itype.story { background: #2563eb; }
+.itype.bug { background: #dc2626; }
+.itype.task { background: #0891b2; }
+.itype.epic { background: #7c3aed; }
+.itype.subtask { background: #64748b; }
+.itype.improvement { background: #0d9488; }
+.itype.idea { background: #f59e0b; }
+.itype.customer { background: #db2777; }
+
+.scorecard.loading .sc-overview,
+.scorecard.loading .sc-types {
+  opacity: 0.55;
+  position: relative;
+}
+.sc-loading-row {
+  padding: 28px 18px;
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text-muted); font-size: 13px;
+  font-weight: 500;
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  padding: 56px 24px; text-align: center;
+  color: var(--text-muted); font-size: 14px;
+}
+.empty .em-title { color: var(--text); font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--border); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.sc-actions{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;}
+.sc-drill{font:inherit;font-size:12px;font-weight:600;cursor:pointer;color:#fff;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:7px;padding:5px 11px;display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s;}
+.sc-drill:hover{background:rgba(255,255,255,0.26);border-color:rgba(255,255,255,0.45);}
+/* consistent left-aligned controls card; gutter comes from the shell (.app-body), so zero here to align left edge with tabs */
+.container{max-width:1320px;padding:14px 0 24px;}
+.picker{margin-bottom:20px;}
+.picker-head{row-gap:10px;}
+.picker-meta{margin-left:2px;}
+.picker-refresh{margin-left:auto;}
+</style>
+<div class="container">
+  <section class="picker">
+    <div class="picker-head">
+      <span class="picker-title">Projects</span>
+      <div class="dropdown" id="dropdown">
+        <button class="dropdown-trigger" id="dropdownTrigger" type="button">
+          <span class="dt-label" id="dtLabel">Select projects</span>
+          <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dropdown-panel" id="dropdownPanel">
+          <div class="dropdown-search">
+            <input id="searchInput" type="text" placeholder="Search projects…" autocomplete="off"/>
+          </div>
+          <div class="dropdown-list" id="dropdownList">
+            <div class="dropdown-empty"><span class="spinner" style="vertical-align: middle;"></span>&nbsp; Loading projects…</div>
+          </div>
+        </div>
+      </div>
+      <button id="selectAllBtn" class="btn-link">Select all</button>
+      <button id="clearBtn" class="btn-link">Clear</button>
+      <span id="pickerMeta" class="picker-meta">0 of 0 selected</span>
+        <button id="refreshBtn" class="btn btn-primary picker-refresh" title="Reload selected projects">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          Refresh
+        </button>
+    </div>
+  </section>
+
+  <div id="statusBox"></div>
+  <div id="errorBox"></div>
+
+  <section id="scorecards" class="scorecards"></section>
+  <div id="emptyState" class="empty" style="display:none;">
+    <div class="em-title">Pick one or more projects above</div>
+    Each selected project will render a scorecard with overall progress, board count, and per-type breakdown.
+  </div>
+</div>
+
+</template>
+<template id="tpl-backlog"><style>
+  :host{
+    color-scheme: light;
+    display:block;
+    --bg:#f4f6fb; --card:#ffffff; --ink:#0b1f44; --muted:#5b6b8c; --faint:#8390ad; --line:#e3e8f0;
+    --accent:#1d4ed8; --accent-soft:#eaf0ff;
+    --todo:#cbd5e1; --prog:#2563eb; --done:#16a34a;
+    --good:#16a34a; --warn:#d97706; --bad:#dc2626;
+    --navy1:#0b1f44; --navy2:#102a5e;
+    --type-story:#2563eb; --type-task:#0891b2; --type-bug:#dc2626; --type-epic:#7c3aed;
+    --type-improve:#0d9488; --type-sub:#64748b; --type-other:#5e6c84;
+    --shadow:0 1px 2px rgba(11,31,68,.06),0 1px 3px rgba(11,31,68,.05);
+    --shadow-lg:0 6px 22px rgba(11,31,68,.10);
+    --r:16px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1240px;margin:0 auto;padding:26px 26px 64px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* header */
+  header.top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:22px}
+  h1{font-size:34px;line-height:1.1;margin:0;font-weight:800;letter-spacing:-.8px}
+  .subline{display:flex;align-items:center;gap:9px;margin-top:9px;color:var(--muted);font-size:13px}
+  .brand{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:#1c54c4;
+    font-weight:700;font-size:12px;padding:4px 10px;border-radius:999px}
+  .dot-sep{color:var(--faint)}
+
+  /* control box */
+  .controls{display:flex;align-items:flex-end;gap:14px;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+  .ctrl{display:flex;flex-direction:column;gap:6px}
+  .ctrl label{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);font-weight:700}
+  select{appearance:none;background:#fff;border:1.5px solid var(--line);border-radius:9px;
+    padding:9px 32px 9px 12px;font-size:13.5px;color:var(--ink);min-width:178px;cursor:pointer;font-weight:600;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7689' stroke-width='2.2' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center}
+  select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1.5px solid var(--line);
+    border-radius:9px;padding:9px 14px;font-size:13.5px;font-weight:700;color:var(--accent);cursor:pointer;height:39px}
+  .btn:hover{background:var(--accent-soft)}
+  .btn svg{transition:transform .5s}
+  .btn.spin svg{transform:rotate(360deg)}
+
+  /* top cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+  @media(max-width:1080px){.cards{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;
+    box-shadow:var(--shadow);min-height:212px;display:flex;flex-direction:column}
+  .card .ctitle{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);font-weight:700;margin-bottom:8px}
+  .card .cexp{font-size:11px;color:var(--faint);line-height:1.4;margin:0 0 12px}
+
+  .hero{background:linear-gradient(150deg,var(--navy2),var(--navy1));color:#fff;border:none;position:relative;overflow:hidden}
+  .hero:after{content:"";position:absolute;right:-50px;top:-50px;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,rgba(86,130,225,.35),transparent 70%)}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);
+    padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.4px;color:#dce6ff}
+  .badge .live{width:8px;height:8px;border-radius:50%;background:#36d27a;box-shadow:0 0 0 3px rgba(54,210,122,.25)}
+  .hero h2{font-size:23px;font-weight:800;margin:14px 0 4px;letter-spacing:-.4px;line-height:1.15;z-index:1;position:relative}
+  .hero .goal{font-size:13px;color:#aebbd6;z-index:1;position:relative}
+  .hero .hr{height:1px;background:rgba(255,255,255,.12);margin:auto 0 12px}
+  .hero .foot{display:flex;gap:8px;flex-wrap:wrap;z-index:1;position:relative}
+  .chiprow{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);
+    padding:5px 10px;border-radius:8px;font-size:12px;color:#e7edfb;font-weight:600}
+
+  .donut-wrap{position:relative;width:118px;height:118px;flex:0 0 auto}
+  .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  .donut-center .n{font-size:24px;font-weight:800;letter-spacing:-.5px;line-height:1}
+  .donut-center .l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-top:2px}
+  .legend{display:flex;flex-direction:column;gap:7px}
+  .legend .li{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .legend .li b{color:var(--ink);margin-left:auto;font-variant-numeric:tabular-nums}
+  .dot{width:9px;height:9px;border-radius:3px;display:inline-block;flex:0 0 auto}
+  .completion-body{display:flex;align-items:center;gap:16px}
+  .csub{font-size:12px;color:var(--faint);margin-top:12px;font-weight:600}
+
+  .health-status{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;margin-bottom:16px;letter-spacing:-.2px}
+  .meter{margin-bottom:14px}
+  .meter .mh{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  .meter .mh b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .track{height:9px;background:#eef1f6;border-radius:6px;overflow:hidden}
+  .track > i{display:block;height:100%;border-radius:6px}
+
+  .bignum{font-size:46px;font-weight:800;letter-spacing:-1.5px;line-height:1}
+  .bignum-sub{font-size:12.5px;color:var(--muted);margin-top:3px;font-weight:600}
+  .note{margin-top:auto;background:#fdf6dc;border:1px solid #f1e3a8;color:#7a5d00;border-radius:10px;
+    padding:10px 12px;font-size:12px;line-height:1.4}
+  .note.good{background:#e7f6ee;border-color:#bfe6d2;color:#176b46}
+  .note.bad{background:#fdeceb;border-color:#f6cfca;color:#9a2820}
+
+  /* chips */
+  .section-label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);font-weight:700;margin:4px 2px 12px}
+  .chips{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+  .chip{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+    border-radius:13px;padding:12px 16px 12px 12px;box-shadow:var(--shadow);min-width:150px}
+  .tile{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .chip .cn{font-size:20px;font-weight:800;line-height:1}
+  .chip .cl{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin-top:2px}
+
+  /* panels */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 20px;margin-bottom:20px;box-shadow:var(--shadow)}
+  .panel h3{font-size:15px;margin:0 0 2px;font-weight:800;letter-spacing:-.2px}
+  .panel .desc{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .chart-box{position:relative;height:320px;width:100%}
+
+  .navy{background:linear-gradient(160deg,var(--navy2),var(--navy1));border:none;color:#fff}
+  .navy h3{color:#fff}
+  .navy .desc{color:#9fb0cd}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:700;
+    text-align:left;padding:0 12px 12px;border-bottom:1px solid var(--line)}
+  tbody td{padding:13px 12px;border-bottom:1px solid #eef1f6;vertical-align:middle}
+  tbody tr:hover{background:#f8faff}
+  tbody tr:last-child td{border-bottom:0}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .lead-tbl th,.lead-tbl td{text-align:right}
+  .lead-tbl th:first-child,.lead-tbl td:first-child{text-align:left}
+  .keylink{font-weight:700}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;letter-spacing:.2px;white-space:nowrap}
+  .pill svg{flex:0 0 auto}
+  .p-crit{background:#fdecea;color:#c4271b}.p-high{background:#fff1e0;color:#b5630a}
+  .p-med{background:#eaf1ff;color:#2c5cc5}.p-low{background:#e8f6ef;color:#177a4e}.p-lowest{background:#eef1f6;color:#5b6675}
+  .s-done{background:#e7f6ee;color:#177a4e}.s-prog{background:#eaf1ff;color:#2c5cc5}.s-todo{background:#eef1f6;color:#5b6675}
+  .ttile{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center}
+  .who{display:flex;align-items:center;gap:9px}
+  .ava{width:26px;height:26px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .unassigned{color:var(--faint);font-style:italic}
+  .titlecell{font-weight:600;color:#2a3550}
+  .pager{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .pager .pg{display:flex;gap:6px}
+  .pager button{border:1.5px solid var(--line);background:#fff;border-radius:8px;min-width:32px;height:32px;cursor:pointer;font-weight:700;color:var(--ink)}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager button.cur{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .state{padding:48px 18px;text-align:center;color:var(--muted)}
+  .spinner{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .banner{background:var(--accent-soft);border:1px solid #cfe1fb;color:#0a4ea3;border-radius:12px;padding:12px 15px;font-size:13px;margin-bottom:18px}
+  .err{background:#fff4f4;border:1px solid #ffd2cc;color:#a31200;border-radius:12px;padding:13px 15px;font-size:13px}
+  .prog-line{font-size:12px;color:var(--muted);margin-top:10px}
+  .hidden{display:none!important}
+
+  /* fix version section */
+  .ms{position:relative;display:inline-block;margin-bottom:16px}
+  .ms-btn{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink)}
+  .ms-btn:hover{background:var(--accent-soft)}
+  .ms-panel{position:absolute;top:44px;left:0;z-index:30;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow-lg);padding:10px;min-width:240px;max-height:300px;overflow:auto}
+  .ms-actions{display:flex;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:9px}
+  .ms-actions button{flex:1;border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent)}
+  .ms-actions button:hover{background:var(--accent-soft)}
+  .ms-panel label{display:flex;align-items:center;gap:9px;padding:7px;font-size:13px;border-radius:7px;cursor:pointer;font-weight:600}
+  .ms-panel label:hover{background:#f4f7fc}
+  .ms-panel label input{width:15px;height:15px;accent-color:var(--accent)}
+  .ms-panel label .vcount{margin-left:auto;color:var(--faint);font-weight:700}
+  .ver-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:16px}
+  @media(max-width:560px){.ver-grid{grid-template-columns:1fr}}
+  .ver-card{border:1px solid var(--line);border-radius:13px;padding:18px 20px;background:#fcfdff}
+  .ver-subs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:15px;padding-top:15px;border-top:1px solid var(--line)}
+  @media(max-width:520px){.ver-subs{grid-template-columns:1fr}}
+  .vsub-h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--ink);margin-bottom:11px}
+  .vsub-h .vsub-n{margin-left:auto;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+  .vsub-types{display:flex;flex-direction:column;gap:9px}
+  .vt{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+  .vt .ttile{width:21px;height:21px;border-radius:6px}
+  .vt b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .vt-none{color:var(--faint);font-size:13px}
+  .ver-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+  .ver-name{font-weight:800;font-size:15.5px;letter-spacing:-.2px}
+  .ver-badge{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .vb-rel{background:#e7f6ee;color:#177a4e}.vb-unrel{background:#eef1f6;color:#5b6675}
+  .ver-pct{font-size:12.5px;color:var(--muted);margin-bottom:11px}
+  .ver-pct .big{font-size:26px;font-weight:800;color:var(--ink);letter-spacing:-.6px;margin-right:3px}
+  .seg{display:flex;height:13px;border-radius:7px;overflow:hidden;background:#eef1f6;margin-bottom:12px}
+  .seg i{display:block;height:100%}
+  .ver-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .ver-legend span{display:inline-flex;align-items:center;gap:7px}
+  .ver-legend b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* consistent left-aligned controls card; gutter comes from the shell (.app-body) */
+.wrap{max-width:1320px;padding:14px 0 24px;}
+header.top{display:block;margin-bottom:20px;}
+header.top > div:first-child{display:none;}
+.controls{width:100%;}
+</style>
+<div class="wrap">
+  <header class="top">
+    <div>
+      
+      <div class="subline">
+        <span class="brand">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 2 19.5l4.5 0L12 9.8l4 7-3.2 0L9 22h13z"/></svg>
+          Atlassian Jira
+        </span>
+        <span class="dot-sep">•</span><span id="brandSub">Backlog analytics · live data</span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctrl">
+        <label for="proj">Project</label>
+        <select id="proj"><option>Loading…</option></select>
+      </div>
+      <div class="ctrl">
+        <label for="dur">Period</label>
+        <select id="dur">
+          <option value="14">Last 2 weeks</option>
+          <option value="30" selected>Last 1 month</option>
+          <option value="90">Last 3 months</option>
+          <option value="180">Last 6 months</option>
+        </select>
+      </div>
+      <button class="btn" id="refresh" title="Re-run the queries">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <div id="content"></div>
+</div>
+
+</template>
+<template id="tpl-sprint"><style>
+:host {
+  color-scheme: light;
+  display:block;
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#0b1f44;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --border: #e3e8f0;
+  --border-strong: #d3dbe8;
+  --text: #0b1f44;
+  --text-muted: #5b6b8c;
+  --text-soft: #8390ad;
+  --primary: #1d4ed8;
+  --primary-600: #1746c3;
+  --primary-50: #eaf0ff;
+  --navy: #0b1f44;
+  --navy-2: #102a5e;
+  --good: #16a34a;
+  --good-bg: #dcfce7;
+  --warn: #d97706;
+  --warn-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --info: #2563eb;
+  --info-bg: #dbeafe;
+  --gray-pill: #eef1f7;
+  --gray-pill-text: #4a5878;
+  --shadow-sm: 0 1px 2px rgba(11, 31, 68, 0.06);
+  --shadow-md: 0 4px 12px rgba(11, 31, 68, 0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.container { padding: 24px 28px 56px; max-width: 1280px; margin: 0 auto; }
+
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; flex-wrap: wrap; }
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--navy); }
+.subtitle { color: var(--text-muted); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.subtitle .dot-sep { width: 4px; height: 4px; background: var(--text-soft); border-radius: 50%; display: inline-block; }
+
+.toolbar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  min-width: 360px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+.field label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--text-soft); text-transform: uppercase;
+}
+.field select {
+  font: inherit; font-size: 14px; font-weight: 500;
+  padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  cursor: pointer; outline: none; transition: border-color .15s, box-shadow .15s;
+  min-width: 220px;
+}
+.field select:hover { border-color: var(--primary); }
+.field select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-50); }
+.btn {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 10px 16px; border-radius: 8px; border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-600); }
+.btn-ghost { background: var(--surface); color: var(--primary); border-color: var(--border-strong); }
+.btn-ghost:hover { background: var(--primary-50); border-color: var(--primary); }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+@media (max-width: 1024px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .kpi-grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--text-soft); text-transform: uppercase; margin: 0 0 12px;
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 200px;
+}
+.hero::before {
+  content: ""; position: absolute; right: -40px; top: -40px;
+  width: 180px; height: 180px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(96,165,250,0.18) 0%, rgba(96,165,250,0) 70%);
+  pointer-events: none;
+}
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.12); padding: 4px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  align-self: flex-start;
+}
+.hero-tag .pulse { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 0 0 rgba(74,222,128,0.6); animation: pulse 2s infinite; }
+.hero-tag.future .pulse { background: #60a5fa; animation: none; }
+.hero-tag.closed .pulse { background: #94a3b8; animation: none; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(74,222,128,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+}
+.hero h2 {
+  margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.hero .goal {
+  color: rgba(255,255,255,0.78); font-size: 14px; line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  cursor: help;
+  min-height: calc(14px * 1.45 * 2);
+}
+.hero .goal.empty {
+  display: block;
+  cursor: default;
+  min-height: 0;
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.hero .goal.empty em {
+  font-style: italic;
+  opacity: 0.85;
+}
+.hero .goal-label { font-weight: 600; color: rgba(255,255,255,0.92); margin-right: 4px; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: rgba(255,255,255,0.85); margin-top: auto; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.12); }
+.hero-meta .item { display: inline-flex; align-items: center; gap: 6px; }
+.hero-meta svg { width: 14px; height: 14px; opacity: 0.85; }
+
+.donut-row { display: flex; align-items: center; gap: 16px; }
+.donut-stack {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.donut-canvas-wrap { position: relative; width: 110px; height: 110px; flex-shrink: 0; }
+.donut-canvas-wrap canvas { width: 110px !important; height: 110px !important; }
+.donut-center {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.donut-center .pct { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -0.02em; }
+.donut-frac {
+  font-size: 11px; color: var(--text-muted); font-weight: 500;
+  white-space: nowrap; letter-spacing: 0.01em;
+}
+
+.legend { font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.legend .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+.health-status { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.health-status.good { color: var(--good); }
+.health-status.warn { color: var(--warn); }
+.health-status.danger { color: var(--danger); }
+.health-status.muted { color: var(--text-muted); }
+.health-status .icon { width: 20px; height: 20px; flex-shrink: 0; }
+.health-meta { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: flex; flex-direction: column; gap: 4px; }
+.bar-row .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.bar-row .lbl strong { color: var(--text); font-weight: 600; }
+.bar { height: 6px; background: #eef1f7; border-radius: 999px; overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 999px; transition: width .4s ease; }
+.bar .work { background: var(--good); }
+.bar .time { background: var(--primary); }
+.bar .time.warn { background: var(--warn); }
+.bar .time.danger { background: var(--danger); }
+.health-foot { color: var(--text-muted); font-size: 12px; margin-top: 12px; }
+
+.velocity-num { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -0.02em; }
+.velocity-unit { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.velocity-note {
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--primary-50); border-left: 3px solid var(--primary);
+  border-radius: 6px; font-size: 13px; line-height: 1.5; color: var(--text);
+}
+.velocity-note.warn { background: var(--warn-bg); border-color: var(--warn); }
+.velocity-note.good { background: var(--good-bg); border-color: var(--good); }
+.velocity-note strong { color: var(--text); }
+
+.backlog-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px 0;
+}
+.backlog-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--text-soft); text-transform: uppercase;
+  margin: 0 0 10px;
+}
+.backlog-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  min-width: 140px;
+  flex: 0 1 auto;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.backlog-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.backlog-card .itype {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+}
+.backlog-card .itype svg {
+  width: 20px;
+  height: 20px;
+}
+.bs-meta { display: flex; flex-direction: column; gap: 2px; }
+.bs-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.bs-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.burndown {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 18px 20px 14px;
+  margin: 0 0 22px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+.burndown::before {
+  content: ""; position: absolute; right: -40px; top: -40px;
+  width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(96,165,250,0.18) 0%, rgba(96,165,250,0) 70%);
+  pointer-events: none;
+}
+.bd-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 14px;
+  margin-bottom: 14px;
+  position: relative; z-index: 1;
+}
+.bd-titles { display: flex; flex-direction: column; gap: 2px; }
+.bd-title {
+  font-size: 14px; font-weight: 700;
+  color: #fff; letter-spacing: -0.01em;
+}
+.bd-title-note {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+.bd-subtitle {
+  font-size: 12px; color: rgba(255,255,255,0.65);
+}
+.bd-legend {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 11px; font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.02em;
+}
+.bd-legend-item {
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.bd-line {
+  width: 22px; height: 2px;
+  display: inline-block;
+}
+.bd-line.bd-actual { background: #fbbf24; height: 2.5px; }
+.bd-line.bd-ideal {
+  background-image: linear-gradient(to right, #60a5fa 50%, transparent 50%);
+  background-size: 6px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 50%;
+  height: 2px;
+}
+.bd-line.bd-trend {
+  background-image: linear-gradient(to right, #fbbf24 50%, transparent 50%);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 50%;
+  height: 2px;
+}
+.bd-marker.bd-today {
+  width: 3px; height: 14px;
+  background: #3b82f6;
+  border-radius: 2px;
+}
+.bd-chart {
+  position: relative; z-index: 1;
+  width: 100%;
+}
+
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 6px 0 12px;
+}
+.section-head h2 { font-size: 18px; font-weight: 700; color: var(--navy); margin: 0; letter-spacing: -0.01em; }
+.section-head .count { color: var(--text-muted); font-weight: 500; font-size: 14px; margin-left: 8px; }
+.table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-sm); }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: #f8fafc; }
+th { text-align: left; padding: 12px 18px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-soft); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+td { padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f9fbff; }
+.issue-key { font-family: "SF Mono", "Monaco", "Menlo", monospace; color: var(--primary); font-weight: 600; font-size: 13px; text-decoration: none; }
+.issue-key:hover { text-decoration: underline; }
+
+.itype { width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.itype svg { width: 14px; height: 14px; color: #fff; }
+.itype.story { background: #2563eb; }
+.itype.bug { background: #dc2626; }
+.itype.task { background: #0891b2; }
+.itype.epic { background: #7c3aed; }
+.itype.subtask { background: #64748b; }
+.itype.improvement { background: #0d9488; }
+.itype.idea { background: #f59e0b; }
+.itype.customer { background: #db2777; }
+
+.prio {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: var(--prio-tint, #f1f5f9);
+  border: 1px solid var(--prio-border, #e2e8f0);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.prio-ico {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--prio-color, #64748b);
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.prio-ico svg { width: 13px; height: 13px; }
+.prio-label { color: var(--prio-color, #64748b); letter-spacing: 0.02em; text-transform: uppercase; font-size: 11px; }
+
+.prio.blocker  { --prio-color:#7f1d1d; --prio-tint:#fef2f2; --prio-border:#fecaca; }
+.prio.highest  { --prio-color:#dc2626; --prio-tint:#fef2f2; --prio-border:#fecaca; }
+.prio.critical { --prio-color:#b91c1c; --prio-tint:#fff1f0; --prio-border:#fecdd3; }
+.prio.high     { --prio-color:#ea580c; --prio-tint:#fff7ed; --prio-border:#fed7aa; }
+.prio.major    { --prio-color:#f97316; --prio-tint:#fff7ed; --prio-border:#fed7aa; }
+.prio.medium   { --prio-color:#d97706; --prio-tint:#fffbeb; --prio-border:#fde68a; }
+.prio.low      { --prio-color:#16a34a; --prio-tint:#f0fdf4; --prio-border:#bbf7d0; }
+.prio.minor    { --prio-color:#15803d; --prio-tint:#f0fdf4; --prio-border:#bbf7d0; }
+.prio.lowest   { --prio-color:#0d9488; --prio-tint:#f0fdfa; --prio-border:#99f6e4; }
+.prio.trivial  { --prio-color:#64748b; --prio-tint:#f8fafc; --prio-border:#e2e8f0; }
+.prio.unknown  { --prio-color:#94a3b8; --prio-tint:#f8fafc; --prio-border:#e2e8f0; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; line-height: 1.4;
+}
+.pill.done { background: var(--good-bg); color: var(--good); }
+.pill.inprogress { background: var(--info-bg); color: var(--info); }
+.pill.todo { background: var(--gray-pill); color: var(--gray-pill-text); }
+.pill.active { background: var(--good-bg); color: var(--good); }
+.pill.future { background: var(--info-bg); color: var(--info); }
+.pill.closed { background: var(--gray-pill); color: var(--gray-pill-text); }
+
+.assignee { display: inline-flex; align-items: center; gap: 10px; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #93c5fd, #2563eb);
+  color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.avatar.unassigned {
+  background: #eef1f7; color: #8390ad;
+  border: 1px dashed #cbd5e1;
+}
+.assignee-name { color: var(--text); font-weight: 500; }
+.assignee.un .assignee-name { color: var(--text-muted); font-style: italic; }
+
+.issue-title { color: var(--text); line-height: 1.4; }
+
+.pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; background: #f8fafc; border-top: 1px solid var(--border);
+  font-size: 13px; color: var(--text-muted); gap: 12px; flex-wrap: wrap;
+}
+.pagination .info { font-weight: 500; }
+.pagination .info strong { color: var(--text); font-weight: 600; }
+.page-controls { display: inline-flex; align-items: center; gap: 4px; }
+.page-btn {
+  font: inherit; min-width: 32px; height: 32px; padding: 0 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: var(--primary-50); }
+.page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); cursor: default; }
+.page-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.page-btn.icon { padding: 0; }
+.page-btn.icon svg { width: 14px; height: 14px; }
+.page-ellipsis { padding: 0 4px; color: var(--text-soft); user-select: none; }
+
+.empty {
+  background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 14px;
+  padding: 48px; text-align: center; color: var(--text-muted); font-size: 14px;
+}
+.error { background: var(--danger-bg); color: var(--danger); padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-weight: 500; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+  vertical-align: -3px; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 14px; color: var(--primary);
+  background: var(--primary-50); padding: 4px 10px; border-radius: 6px;
+}
+.brand svg { width: 14px; height: 14px; }
+
+/* consistent left-aligned controls card; gutter comes from the shell (.app-body) */
+.container{max-width:1320px;padding:14px 0 24px;}
+.page-head{display:block;margin-bottom:20px;}
+.page-head > div:first-child{display:none;}
+.toolbar{width:100%;}
+/* Empty sprint goal must NOT inherit the generic white .empty panel (it made a white box with
+   white text). Render a readable blueish chip on the navy hero instead. */
+.hero .goal.empty{
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.30);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: rgba(255,255,255,0.85);
+  min-height: 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.hero .goal.empty em{ font-style: italic; opacity: 0.92; color: rgba(255,255,255,0.85); }
+/* neutral info note (e.g. carried project isn't a Scrum project) */
+.info{ background: var(--info-bg); color: var(--info); border: 1px solid #bfd4fb; padding: 11px 15px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; font-weight: 500; }
+.info strong{ font-weight: 700; }
+</style>
+<div class="container">
+  <div class="page-head">
+    <div>
+      
+      <div class="subtitle">
+        <span class="brand">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 12.559 24V12.5a.987.987 0 0 0-.988-.987zm5.715-5.7H5.715a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.215 5.215 0 0 0 5.215 5.214V6.804a.988.988 0 0 0-.988-.988zM23 0H11.43a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 23.989 12.5V.987A.988.988 0 0 0 23 0z"/></svg>
+          Atlassian Jira
+        </span>
+        <span class="dot-sep"></span>
+        <span>Scrum portfolio &middot; live data</span>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="field">
+        <label for="projectSelect">Project</label>
+        <select id="projectSelect"><option value="">Loading projects…</option></select>
+      </div>
+      <div class="field">
+        <label for="sprintSelect">Sprint</label>
+        <select id="sprintSelect"><option value="">— Pick a project —</option></select>
+      </div>
+      <button id="refreshBtn" class="btn btn-ghost" title="Reload">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div id="errBox"></div>
+  <div id="noteBox"></div>
+  <div id="content"></div>
+</div>
+
+</template>
+</head>
+<body>
+
+<div class="app">
+  <header class="app-head">
+    <div class="head-top">
+      <h1 class="app-title">Ultimate Jira Projects Dashboard</h1>
+      <div class="conn-badge" id="connBadge" data-state="checking">
+        <span class="conn-brand"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 12.559 24V12.5a.987.987 0 0 0-.988-.987zm5.715-5.7H5.715a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.215 5.215 0 0 0 5.215 5.214V6.804a.988.988 0 0 0-.988-.988zM23 0H11.43a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 23.989 12.5V.987A.988.988 0 0 0 23 0z"/></svg> Atlassian Jira</span>
+        <span class="conn-div"></span>
+        <span class="conn-dot"></span>
+        <span class="conn-label" id="connLabel">Checking…</span>
+        <button class="conn-reconnect" id="connReconnect" hidden>Reconnect</button>
+      </div>
+    </div>
+    <nav class="levelnav" id="levelnav">
+      <button data-level="portfolio"><span class="lvl-num">1</span><span class="lvl-t">Portfolio Health</span></button>
+      <button data-level="backlog"><span class="lvl-num">2</span><span class="lvl-t">Product Backlog Health</span></button>
+      <button data-level="sprint"><span class="lvl-num">3</span><span class="lvl-t">Sprint Health</span></button>
+    </nav>
+  </header>
+</div>
+<div class="app app-body">
+  <div class="view" id="view-portfolio"></div>
+  <div class="view" id="view-backlog" hidden></div>
+  <div class="view" id="view-sprint" hidden></div>
+</div>
+
+<script>
+function createPortfolioView(root, host, shell){
+
+const CLOUD_ID = "YOUR_CLOUD_ID";
+const SITE_HOST = "your-company.atlassian.net";
+const SPRINT_FIELDS = ["customfield_10007", "customfield_10020"];
+const PAGE_SIZE = 100;
+const MAX_PAGES_PER_PROJECT = 10;
+const MAX_ISSUES_PER_PROJECT = PAGE_SIZE * MAX_PAGES_PER_PROJECT;
+
+const PRIMARY_TYPES = [
+  { name: "Epic",  plural: "Epics",   cls: "epic"  },
+  { name: "Story", plural: "Stories", cls: "story" },
+  { name: "Task",  plural: "Tasks",   cls: "task"  },
+  { name: "Bug",   plural: "Bugs",    cls: "bug"   },
+];
+
+const state = {
+  projects: [],
+  selectedKeys: new Set(),
+  data: new Map(),
+  isFetching: false,
+  fetchQueue: [],
+  currentFetchingKey: null,
+  searchTerm: "",
+};
+
+const $ = (id) => root.getElementById(id);
+function firstSelectedProject(){ for (const p of state.projects) if (state.selectedKeys.has(p.key)) return p; return null; }
+function syncContext(){ const p = firstSelectedProject(); if (p) { if (shell && shell.setProjectContext) shell.setProjectContext(p.key, p.name); } else if (shell && shell.clearProjectContext) shell.clearProjectContext(); }
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function pctOf(part, total) { return total ? Math.round(part / total * 100) : 0; }
+
+function renderStatusBar(html) {
+  $("statusBox").innerHTML = html || "";
+}
+
+function refreshStatus() {
+  if (!state.currentFetchingKey) {
+    renderStatusBar("");
+    return;
+  }
+  const proj = state.projects.find(p => p.key === state.currentFetchingKey);
+  const projName = proj?.name || state.currentFetchingKey;
+  const more = state.fetchQueue.length;
+  renderStatusBar(`<div class="status-bar"><span class="spinner"></span><span>Loading ${escapeHtml(projName)} (${more} more in queue)…</span></div>`);
+}
+function setError(msg) {
+  $("errorBox").innerHTML = msg ? `<div class="error-bar">${escapeHtml(msg)}</div>` : "";
+}
+
+async function callMcp(tool, args) {
+  if (!window.cowork || !window.cowork.callMcpTool) throw new Error("Cowork MCP bridge not available");
+  const res = await window.cowork.callMcpTool(tool, args);
+  if (res && res.isError) { const m = (res.content && res.content[0] && res.content[0].text) || "tool error"; throw new Error(m); }
+  if (res && Array.isArray(res.content)) {
+    const txt = res.content.map(c => c.text || "").join("");
+    try { const parsed = JSON.parse(txt); if (parsed != null) return parsed; } catch (e) {}
+  }
+  if (res && res.structuredContent != null) return res.structuredContent;
+  if (typeof res === "string") { try { return JSON.parse(res); } catch (e) { return res; } }
+  return res;
+}
+function normSearch(res) {
+  const iss = res && res.issues;
+  if (Array.isArray(iss)) return { list: iss, next: res.isLast ? undefined : res.nextPageToken };
+  if (iss && Array.isArray(iss.nodes)) { const pi = iss.pageInfo || {}; return { list: iss.nodes, next: pi.hasNextPage ? pi.endCursor : undefined }; }
+  return { list: [], next: undefined };
+}
+
+function issueTypeIcon(typeName) {
+  const name = (typeName || "").toLowerCase();
+  let cls = "task", svg;
+  if (name.includes("bug")) {
+    cls = "bug"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/><path d="M2 12h4M18 12h4M12 2v4M12 18v4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+  } else if (name.includes("story")) {
+    cls = "story"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14v16l-7-4-7 4z"/></svg>`;
+  } else if (name.includes("epic")) {
+    cls = "epic"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>`;
+  } else if (name.includes("sub")) {
+    cls = "subtask"; svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 5v9a3 3 0 0 0 3 3h11"/><path d="M14 12l5 5-5 5"/></svg>`;
+  } else if (name.includes("improvement")) {
+    cls = "improvement"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4" stroke="currentColor" stroke-width="2" fill="none"/></svg>`;
+  } else if (name.includes("idea")) {
+    cls = "idea"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 18h6v2H9zM12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`;
+  } else if (name.includes("customer")) {
+    cls = "customer"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
+  } else {
+    cls = "task"; svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>`;
+  }
+  return { cls, svg };
+}
+
+function typeBadge(typeName) {
+  const { cls, svg } = issueTypeIcon(typeName);
+  return `<span class="tb-badge"><span class="itype ${cls}">${svg}</span>${escapeHtml(typeName)}</span>`;
+}
+
+function svgDonut(done, inProg, todo, opts) {
+  const o = Object.assign({ size: 92, sw: 9 }, opts || {});
+  const total = done + inProg + todo;
+  const r = (o.size - o.sw) / 2;
+  const c = 2 * Math.PI * r;
+  const cx = o.size / 2;
+  const cy = o.size / 2;
+
+  let segs = "";
+  if (total > 0) {
+    const dLen = c * done / total;
+    const iLen = c * inProg / total;
+    const tLen = c * todo / total;
+    if (done > 0) {
+      segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#16a34a" stroke-width="${o.sw}"
+        stroke-dasharray="${dLen} ${c - dLen}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    }
+    if (inProg > 0) {
+      segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2563eb" stroke-width="${o.sw}"
+        stroke-dasharray="${iLen} ${c - iLen}" stroke-dashoffset="${-dLen}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    }
+    if (todo > 0) {
+      segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#cbd5e1" stroke-width="${o.sw}"
+        stroke-dasharray="${tLen} ${c - tLen}" stroke-dashoffset="${-(dLen + iLen)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    }
+  }
+
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  const labelText = total > 0 ? `${pct}%` : "—";
+  const subText = total > 0 ? `${done}/${total} done` : "no items";
+
+  return `<div class="donut-wrap">
+    <svg viewBox="0 0 ${o.size} ${o.size}" width="${o.size}" height="${o.size}">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f1f5f9" stroke-width="${o.sw}"/>
+      ${segs}
+      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+        font-size="${Math.round(o.size * 0.26)}" font-weight="700" fill="#0b1f44">${escapeHtml(labelText)}</text>
+    </svg>
+    <div class="donut-sublabel">${escapeHtml(subText)}</div>
+  </div>`;
+}
+
+function aggregate(issues, capped) {
+  const total = { done: 0, inProgress: 0, todo: 0 };
+  const byType = new Map();
+  const typesPresent = new Map();
+  const boardIds = new Set();
+
+  for (const issue of issues) {
+    const cat = issue?.fields?.status?.statusCategory?.key;
+    const type = issue?.fields?.issuetype?.name || "Unknown";
+    const bucket = cat === "done" ? "done" : cat === "indeterminate" ? "inProgress" : "todo";
+    total[bucket]++;
+    typesPresent.set(type, (typesPresent.get(type) || 0) + 1);
+
+    if (!byType.has(type)) byType.set(type, { done: 0, inProgress: 0, todo: 0 });
+    byType.get(type)[bucket]++;
+
+    for (const f of SPRINT_FIELDS) {
+      const v = issue?.fields?.[f];
+      if (Array.isArray(v)) {
+        for (const s of v) if (s?.boardId != null) boardIds.add(s.boardId);
+      }
+    }
+  }
+  return {
+    total, byType,
+    typesPresent: Array.from(typesPresent.entries()).sort((a, b) => b[1] - a[1]),
+    boardCount: boardIds.size,
+    totalIssues: issues.length,
+    capped,
+    fetchedAt: Date.now(),
+  };
+}
+
+function findTypeData(byType, primaryName) {
+  for (const [name, data] of byType) {
+    if (name.toLowerCase() === primaryName.toLowerCase()) return { name, data };
+  }
+  return null;
+}
+
+let __nonce = 0;
+function bustJql(q){
+  const tag = "cb" + Date.now().toString(36) + (__nonce++).toString(36);
+  const clause = ' AND (created >= "1970-01-01" OR summary ~ "' + tag + '")';
+  const i = q.search(/\bORDER\s+BY\b/i);
+  return i >= 0 ? (q.slice(0, i) + clause + " " + q.slice(i)) : (q + clause);
+}
+async function fetchProjectIssues(projectKey) {
+  const all = [];
+  let pageToken;
+  let pages = 0;
+  const fields = ["status", "issuetype", ...SPRINT_FIELDS];
+  let capped = false;
+  const __fpiJql = bustJql(`project = "${projectKey}" ORDER BY updated DESC`);
+
+  do {
+    const args = {
+      cloudId: CLOUD_ID,
+      jql: __fpiJql,
+      fields,
+      maxResults: PAGE_SIZE,
+    };
+    if (pageToken) args.nextPageToken = pageToken;
+    const res = await callMcp("mcp__YOUR_CONNECTOR_ID__searchJiraIssuesUsingJql", args);
+    const norm = normSearch(res);
+    all.push(...norm.list);
+    pages++;
+    pageToken = norm.next;
+    if (pages >= MAX_PAGES_PER_PROJECT && pageToken) {
+      capped = true;
+      break;
+    }
+  } while (pageToken);
+
+  return aggregate(all, capped);
+}
+
+function enqueueFetch(projectKey, force = false) {
+  if (!force && state.data.has(projectKey)) {
+    renderScorecards();
+    return;
+  }
+  if (!state.fetchQueue.includes(projectKey) && state.currentFetchingKey !== projectKey) {
+    state.fetchQueue.push(projectKey);
+  }
+  refreshStatus();
+  processQueue();
+}
+
+async function processQueue() {
+  if (state.isFetching) return;
+  if (state.fetchQueue.length === 0) {
+    state.currentFetchingKey = null;
+    refreshStatus();
+    return;
+  }
+  state.isFetching = true;
+  setError("");
+
+  while (state.fetchQueue.length > 0) {
+    const key = state.fetchQueue.shift();
+    if (!state.selectedKeys.has(key)) continue;
+
+    state.currentFetchingKey = key;
+    refreshStatus();
+
+    try {
+      const data = await fetchProjectIssues(key);
+      state.data.set(key, data);
+    } catch (err) {
+      console.error(`[fetchProjectIssues:${key}]`, err);
+      const proj = state.projects.find(p => p.key === key);
+      state.data.set(key, { error: err.message || String(err), totalIssues: 0 });
+      setError(`Failed to load ${proj?.name || key}: ${err.message || err}`);
+    }
+    renderScorecards();
+  }
+  state.currentFetchingKey = null;
+  state.isFetching = false;
+  refreshStatus();
+}
+
+async function loadProjects() {
+  try {
+    const res = await callMcp("mcp__YOUR_CONNECTOR_ID__getVisibleJiraProjects", {
+      cloudId: CLOUD_ID, action: "view", expandIssueTypes: false, maxResults: 50
+    });
+    const list = (res && res.values) ? res.values.slice() : [];
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    state.projects = list;
+    renderDropdown();
+    updateTrigger();
+    updatePickerMeta();
+    if (shell && shell.reportConnection) shell.reportConnection(list.length > 0);
+  } catch (err) {
+    setError("Failed to load projects: " + (err.message || err));
+    if (shell && shell.reportConnection) shell.reportConnection(false);
+  }
+}
+
+function renderDropdown() {
+  const list = $("dropdownList");
+  if (!state.projects.length) {
+    list.innerHTML = `<div class="dropdown-empty">No projects available.</div>`;
+    return;
+  }
+  const term = state.searchTerm.toLowerCase();
+  const filtered = term
+    ? state.projects.filter(p => p.name.toLowerCase().includes(term) || p.key.toLowerCase().includes(term))
+    : state.projects;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="dropdown-empty">No matches for "${escapeHtml(state.searchTerm)}".</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(p => {
+    const active = state.selectedKeys.has(p.key);
+    return `<div class="dropdown-option ${active ? "selected" : ""}" data-key="${escapeHtml(p.key)}" role="option" tabindex="0">
+      <span class="opt-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+      <span class="opt-name">${escapeHtml(p.name)}</span>
+      <span class="opt-key">${escapeHtml(p.key)}</span>
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll(".dropdown-option").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleProject(el.dataset.key);
+    });
+  });
+}
+
+function updateTrigger() {
+  const label = $("dtLabel");
+  const count = state.selectedKeys.size;
+  if (count === 0) {
+    label.textContent = "Select projects";
+  } else if (count === 1) {
+    const key = [...state.selectedKeys][0];
+    const proj = state.projects.find(p => p.key === key);
+    label.innerHTML = `${escapeHtml(proj?.name || key)}<span class="dt-pill">1</span>`;
+  } else {
+    label.innerHTML = `Projects selected<span class="dt-pill">${count}</span>`;
+  }
+}
+
+function updatePickerMeta() {
+  $("pickerMeta").textContent = `${state.selectedKeys.size} of ${state.projects.length} selected`;
+}
+
+function toggleProject(key) {
+  if (state.selectedKeys.has(key)) {
+    state.selectedKeys.delete(key);
+    const idx = state.fetchQueue.indexOf(key);
+    if (idx !== -1) state.fetchQueue.splice(idx, 1);
+    refreshStatus();
+  } else {
+    state.selectedKeys.add(key);
+    enqueueFetch(key);
+  }
+  const opt = root.querySelector(`.dropdown-option[data-key="${CSS.escape(key)}"]`);
+  if (opt) opt.classList.toggle("selected", state.selectedKeys.has(key));
+  updateTrigger();
+  updatePickerMeta();
+  renderScorecards();
+  syncContext();
+}
+
+function renderScorecards() {
+  const target = $("scorecards");
+  const empty = $("emptyState");
+  const keys = state.projects
+    .filter(p => state.selectedKeys.has(p.key))
+    .map(p => p.key);
+
+  if (!keys.length) {
+    target.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+  target.innerHTML = keys.map(k => {
+    const proj = state.projects.find(p => p.key === k);
+    const data = state.data.get(k);
+    return scorecardHTML(proj, data);
+  }).join("");
+  target.querySelectorAll(".sc-drill").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    shell.drill(b.dataset.key, b.dataset.name, b.dataset.level);
+  }));
+}
+
+const ICON_BOARD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/></svg>`;
+const ICON_LIST = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>`;
+
+function scorecardHTML(project, data) {
+  const head = `
+    <div class="sc-head">
+      <div class="sc-name-row">
+        <h2 class="sc-name">${escapeHtml(project.name)}</h2>
+        <span class="sc-key">${escapeHtml(project.key)}</span>
+      </div>
+      <div class="sc-actions">
+        <button class="sc-drill" data-key="${escapeHtml(project.key)}" data-name="${escapeHtml(project.name)}" data-level="backlog">Backlog health &rarr;</button>
+        <button class="sc-drill" data-key="${escapeHtml(project.key)}" data-name="${escapeHtml(project.name)}" data-level="sprint">Sprint health &rarr;</button>
+      </div>
+      ${data && !data.error ? `
+        <div class="sc-meta-row">
+          <span class="sc-meta-item">${ICON_BOARD}<strong>${data.boardCount}</strong>&nbsp;board${data.boardCount === 1 ? "" : "s"}</span>
+          <span class="sc-meta-item">${ICON_LIST}<strong>${data.totalIssues}${data.capped ? "+" : ""}</strong>&nbsp;work item${data.totalIssues === 1 ? "" : "s"}</span>
+          ${data.capped ? `<span class="cap-warn" title="Capped at ${MAX_ISSUES_PER_PROJECT} for performance">capped at ${MAX_ISSUES_PER_PROJECT}</span>` : ""}
+        </div>
+        ${data.typesPresent.length ? `<div class="type-badges">${data.typesPresent.map(([n]) => typeBadge(n)).join("")}</div>` : ""}
+      ` : ""}
+    </div>
+  `;
+
+  if (!data) {
+    return `<article class="scorecard loading">
+      ${head}
+      <div class="sc-loading-row"><span class="spinner"></span> Fetching issues from Jira…</div>
+    </article>`;
+  }
+
+  if (data.error) {
+    return `<article class="scorecard">
+      ${head}
+      <div class="sc-loading-row" style="color: var(--danger);">Could not load: ${escapeHtml(data.error)}</div>
+    </article>`;
+  }
+
+  const t = data.total;
+  const oTotal = t.done + t.inProgress + t.todo;
+  const oPctHtml = (n) => `<span class="pct">(${pctOf(n, oTotal)}%)</span>`;
+
+  const overview = `
+    <div class="sc-overview">
+      ${svgDonut(t.done, t.inProgress, t.todo, { size: 110, sw: 11 })}
+      <div class="sc-stats">
+        <div class="stat-row"><span class="swatch done"></span><span class="label">Done</span><span class="num">${t.done}${oPctHtml(t.done)}</span></div>
+        <div class="stat-row"><span class="swatch inprog"></span><span class="label">In Progress</span><span class="num">${t.inProgress}${oPctHtml(t.inProgress)}</span></div>
+        <div class="stat-row"><span class="swatch todo"></span><span class="label">To Do</span><span class="num">${t.todo}${oPctHtml(t.todo)}</span></div>
+      </div>
+    </div>
+  `;
+
+  const types = `
+    <div class="sc-types">
+      ${PRIMARY_TYPES.map(pt => typeBlockHTML(pt, data.byType)).join("")}
+    </div>
+  `;
+
+  return `<article class="scorecard">${head}${overview}${types}</article>`;
+}
+
+function typeBlockHTML(primary, byType) {
+  const found = findTypeData(byType, primary.name);
+  const counts = found ? found.data : { done: 0, inProgress: 0, todo: 0 };
+  const total = counts.done + counts.inProgress + counts.todo;
+  const { cls, svg } = issueTypeIcon(primary.name);
+  const tPct = (n) => `<span class="pct">(${pctOf(n, total)}%)</span>`;
+
+  const body = total === 0
+    ? `<div class="tb-empty">No ${escapeHtml(primary.plural.toLowerCase())} in this project.</div>`
+    : `<div class="tb-body">
+        ${svgDonut(counts.done, counts.inProgress, counts.todo, { size: 76, sw: 8 })}
+        <div class="tb-counts">
+          <div class="tb-cnt"><span class="swatch" style="background:#16a34a;"></span><strong>${counts.done}</strong>${tPct(counts.done)}<span class="lbl">Done</span></div>
+          <div class="tb-cnt"><span class="swatch" style="background:#2563eb;"></span><strong>${counts.inProgress}</strong>${tPct(counts.inProgress)}<span class="lbl">In Progress</span></div>
+          <div class="tb-cnt"><span class="swatch" style="background:#cbd5e1;"></span><strong>${counts.todo}</strong>${tPct(counts.todo)}<span class="lbl">To Do</span></div>
+        </div>
+      </div>`;
+
+  return `<div class="type-block">
+    <div class="tb-head">
+      <span class="itype ${cls}">${svg}</span>
+      <span class="tb-name">${primary.plural}</span>
+      <span class="tb-total">${total}</span>
+    </div>
+    ${body}
+  </div>`;
+}
+
+const dropdownEl = $("dropdown");
+const triggerEl = $("dropdownTrigger");
+const panelEl = $("dropdownPanel");
+const searchEl = $("searchInput");
+
+function openDropdown() {
+  panelEl.classList.add("open");
+  triggerEl.classList.add("open");
+  setTimeout(() => searchEl?.focus(), 0);
+}
+function closeDropdown() {
+  panelEl.classList.remove("open");
+  triggerEl.classList.remove("open");
+}
+triggerEl.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (panelEl.classList.contains("open")) closeDropdown();
+  else openDropdown();
+});
+document.addEventListener("click", (e) => {
+  const p = e.composedPath ? e.composedPath() : [];
+  if (!p.includes(dropdownEl)) closeDropdown();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && panelEl.classList.contains("open")) closeDropdown();
+});
+searchEl.addEventListener("input", (e) => {
+  state.searchTerm = e.target.value;
+  renderDropdown();
+});
+searchEl.addEventListener("click", (e) => e.stopPropagation());
+
+$("selectAllBtn").addEventListener("click", () => {
+  for (const p of state.projects) {
+    if (!state.selectedKeys.has(p.key)) {
+      state.selectedKeys.add(p.key);
+      enqueueFetch(p.key);
+    }
+  }
+  renderDropdown();
+  updateTrigger();
+  updatePickerMeta();
+  renderScorecards();
+  syncContext();
+});
+
+$("clearBtn").addEventListener("click", () => {
+  state.selectedKeys.clear();
+  state.fetchQueue.length = 0;
+  refreshStatus();
+  renderDropdown();
+  updateTrigger();
+  updatePickerMeta();
+  renderScorecards();
+  syncContext();
+});
+
+async function reloadAll(){
+  const btn = $("refreshBtn"); if (btn) btn.disabled = true;
+  state.data.clear();
+  await loadProjects();
+  for (const k of [...state.selectedKeys]) if (!state.projects.some(p => p.key === k)) state.selectedKeys.delete(k);
+  updateTrigger(); updatePickerMeta();
+  state.fetchQueue.length = 0;
+  for (const k of state.selectedKeys) state.fetchQueue.push(k);
+  refreshStatus();
+  renderScorecards();
+  processQueue();
+  syncContext();
+  if (btn) btn.disabled = false;
+}
+$("refreshBtn").addEventListener("click", () => reloadAll());
+
+  let __loaded = false;
+  async function ensureLoaded(){
+    if (__loaded) return; __loaded = true;
+    await loadProjects();
+    renderScorecards();   // shows the "pick one or more projects" empty state; no auto-selection
+    syncContext();
+  }
+  let __activatedOnce = false;
+  function refetchSelected(){
+    state.data.clear(); state.fetchQueue.length = 0;
+    for (const k of state.selectedKeys) state.fetchQueue.push(k);
+    refreshStatus(); renderScorecards(); processQueue();
+  }
+  return {
+    // Re-fetch fresh data on every re-activation of the Portfolio tab.
+    activate: async () => { if (!__activatedOnce){ __activatedOnce = true; await ensureLoaded(); } else { refetchSelected(); } },
+    getFirstSelected: () => { const p = firstSelectedProject(); return p ? { key: p.key, name: p.name } : null; },
+    refresh: () => reloadAll(),
+    deactivate: () => {}
+  };
+}
+
+
+function createBacklogView(root, host, shell){
+  "use strict";
+  const SERVER = "mcp__YOUR_CONNECTOR_ID__";
+  const T = {
+    res: SERVER+"getAccessibleAtlassianResources",
+    projects: SERVER+"getVisibleJiraProjects",
+    search: SERVER+"searchJiraIssuesUsingJql",
+    issue: SERVER+"getJiraIssue"
+  };
+  const LS="jira_backlog_health_v2";
+  const CYCLE_CAP=60, PAGE_CAP=600, ROWS=12;
+
+  const $=s=>root.querySelector(s);
+  const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+  const days=ms=>ms/86400000;
+  const fmtD=d=>d==null||isNaN(d)?"–":(d<10?d.toFixed(1):Math.round(d).toString());
+  const round1=v=>v==null?null:Math.round(v*10)/10;
+  const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const getCss=v=>getComputedStyle(host).getPropertyValue(v).trim();
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  const mean=a=>a.length?sum(a)/a.length:null;
+  const median=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+  const fmtDate=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+
+  async function mcp(name,args){
+    const r=await window.cowork.callMcpTool(name,args);
+    if(r&&r.isError){const m=(r.content&&r.content[0]&&r.content[0].text)||"tool error";throw new Error(name.replace(SERVER,"")+": "+m);}
+    let data=r?r.structuredContent:null;
+    if(data==null&&r&&r.content&&r.content[0]&&r.content[0].text){try{data=JSON.parse(r.content[0].text);}catch(e){throw new Error("parse error: "+name.replace(SERVER,""));}}
+    return data;
+  }
+
+  // ---- icons & meta ----
+  const ICO={
+    bookmark:'<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+    bug:'<line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="6.3" y1="6.3" x2="17.7" y2="17.7"/><line x1="6.3" y1="17.7" x2="17.7" y2="6.3"/>',
+    epic:'<polygon points="13 2 4 14 11 14 10 22 20 9 13 9 13 2"/>',
+    improve:'<polyline points="3 17 9 11 13 15 21 6"/><polyline points="15 6 21 6 21 12"/>',
+    task:'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    sub:'<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+    dot:'<circle cx="12" cy="12" r="6"/>'
+  };
+  function tsvg(inner,sz){return `<svg width="${sz||15}" height="${sz||15}" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;}
+  function typeMeta(name){
+    const n=(name||"").toLowerCase();
+    if(n.includes("story")) return {c:getCss("--type-story"),i:ICO.bookmark};
+    if(n.includes("bug")) return {c:getCss("--type-bug"),i:ICO.bug};
+    if(n.includes("epic")) return {c:getCss("--type-epic"),i:ICO.epic};
+    if(n.includes("improv")) return {c:getCss("--type-improve"),i:ICO.improve};
+    if(n.includes("sub")) return {c:getCss("--type-sub"),i:ICO.sub};
+    if(n.includes("task")) return {c:getCss("--type-task"),i:ICO.task};
+    return {c:getCss("--type-other"),i:ICO.dot};
+  }
+  const TRI_UP='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6l7 12H5z"/></svg>';
+  const TRI_DN='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18L5 6h14z"/></svg>';
+  const EQ='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="9" width="14" height="2.4" rx="1"/><rect x="5" y="13" width="14" height="2.4" rx="1"/></svg>';
+  function prioMeta(name){
+    const n=(name||"").toLowerCase();
+    if(/(highest|block|critical)/.test(n)) return {cls:"p-crit",ic:TRI_UP};
+    if(/(high|major)/.test(n)) return {cls:"p-high",ic:TRI_UP};
+    if(/(medium|normal)/.test(n)) return {cls:"p-med",ic:EQ};
+    if(/(lowest|trivial)/.test(n)) return {cls:"p-lowest",ic:TRI_DN};
+    if(/(low|minor)/.test(n)) return {cls:"p-low",ic:TRI_DN};
+    return {cls:"p-med",ic:EQ};
+  }
+  function statusMeta(f){
+    const k=f.status&&f.status.statusCategory?f.status.statusCategory.key:"new";
+    return k==="done"?"s-done":k==="indeterminate"?"s-prog":"s-todo";
+  }
+  const AVA=["#2f6fed","#1aa37a","#8270db","#e9a100","#e2483d","#0aa2c0","#d6499b"];
+  function initials(name){const p=(name||"").trim().split(/\s+/);return ((p[0]||"")[0]||"?").toUpperCase()+((p[1]||"")[0]||"").toUpperCase();}
+  function avaColor(name){let h=0;for(const ch of (name||""))h=(h*31+ch.charCodeAt(0))>>>0;return AVA[h%AVA.length];}
+
+  function orderTypeNames(names){
+    const pri=["epic","story","task","bug","improvement"];const isSub=n=>/sub-?task/i.test(n);
+    return [...new Set((names||[]).filter(Boolean))].sort((a,b)=>{
+      const sa=isSub(a)?1:0,sb=isSub(b)?1:0;if(sa!==sb)return sa-sb;
+      const ra=(()=>{const i=pri.findIndex(p=>a.toLowerCase().includes(p));return i<0?50:i;})();
+      const rb=(()=>{const i=pri.findIndex(p=>b.toLowerCase().includes(p));return i<0?50:i;})();
+      return ra!==rb?ra-rb:a.localeCompare(b);
+    });
+  }
+  const parseTypes=s=>{try{return JSON.parse(s||"[]");}catch(e){return [];}};
+  const pluralize=(name,n)=> n===1 ? name : (/y$/i.test(name)? name.replace(/y$/i,"ies") : name+"s");
+
+  // ---- state ----
+  let cloudId="YOUR_CLOUD_ID";
+  let duration=30, projectKey=null, projectName=null, supportedTypes=[];
+  let loadToken=0, workItems=[], page=0, pendingProjectKey=null, __inited=false;
+  let selectedVersions=new Set(), versionProject=null;
+  const charts={};
+  const saveState=()=>{try{localStorage.setItem(LS,JSON.stringify({projectKey,duration}));}catch(e){}};
+  const loadState=()=>{try{return JSON.parse(localStorage.getItem(LS)||"{}");}catch(e){return {};}};
+  const periodLabel=()=>({14:"last 2 weeks",30:"last month",90:"last 3 months",180:"last 6 months"})[duration];
+
+  // ---- data ----
+  let __nonce=0;
+  function bustJql(q){
+    const tag="cb"+Date.now().toString(36)+(__nonce++).toString(36);
+    const clause=' AND (created >= "1970-01-01" OR summary ~ "'+tag+'")';
+    const i=q.search(/\bORDER\s+BY\b/i);
+    return i>=0 ? (q.slice(0,i)+clause+" "+q.slice(i)) : (q+clause);
+  }
+  async function searchAll(jql,fields,cap){
+    jql=bustJql(jql);
+    let nodes=[],token=null,pages=0;
+    do{
+      const args={cloudId,jql,fields,maxResults:100};if(token)args.nextPageToken=token;
+      const data=await mcp(T.search,args);
+      const iss=(data&&data.issues)||{};
+      nodes=nodes.concat(iss.nodes||[]);
+      const pi=iss.pageInfo||{};token=(pi.hasNextPage&&pi.endCursor)?pi.endCursor:null;pages++;
+    }while(token&&nodes.length<cap&&pages<12);
+    return nodes;
+  }
+  async function inProgressStart(key,catMap){
+    const data=await mcp(T.issue,{cloudId,issueIdOrKey:key,fields:["status"],expand:"changelog"});
+    const node=data&&data.issues&&data.issues.nodes&&data.issues.nodes[0];
+    const hist=(node&&node.changelog&&node.changelog.histories)||[];
+    hist.sort((a,b)=>new Date(a.created)-new Date(b.created));
+    for(const h of hist)for(const it of (h.items||[]))if(it.field==="status"&&catMap[it.toString]==="indeterminate")return h.created;
+    for(const h of hist)for(const it of (h.items||[])){if(it.field!=="status")continue;const c=catMap[it.toString];if(!c||c!=="new")return h.created;}
+    return null;
+  }
+  const bucketCat=k=>k==="done"?"done":k==="indeterminate"?"prog":"todo";
+
+  function analyze(created,resolved,supported){
+    const types={};const ensure=n=>types[n]||(types[n]={name:n,created:0,resolved:0,todo:0,prog:0,done:0,leads:[],cycles:[]});
+    (supported||[]).forEach(ensure);
+    const catMap={};
+    const note=f=>{if(f&&f.status&&f.status.statusCategory)catMap[f.status.name]=f.status.statusCategory.key;};
+    created.forEach(i=>{const f=i.fields||{};note(f);const t=ensure(f.issuetype?f.issuetype.name:"Unknown");t.created++;t[bucketCat(f.status&&f.status.statusCategory?f.status.statusCategory.key:"")]++;});
+    resolved.forEach(i=>{const f=i.fields||{};note(f);const t=ensure(f.issuetype?f.issuetype.name:"Unknown");t.resolved++;if(f.created&&f.resolutiondate){const lt=days(new Date(f.resolutiondate)-new Date(f.created));if(lt>=0)t.leads.push(lt);}});
+    return {types,catMap};
+  }
+
+  function buildTrend(created,resolved){
+    const now=new Date();const start=new Date(now.getTime()-duration*86400000);
+    const weekly=duration>35;const step=(weekly?7:1)*86400000;
+    const bks=[];for(let t=start.getTime();t<now.getTime();t+=step)bks.push(new Date(t));bks.push(now);
+    const cC=bks.map(b=>created.filter(i=>i.fields.created&&new Date(i.fields.created)<=b).length);
+    const cR=bks.map(b=>resolved.filter(i=>i.fields.resolutiondate&&new Date(i.fields.resolutiondate)<=b).length);
+    return {labels:bks.map(fmtDate),created:cC,resolved:cR};
+  }
+
+  // ---- bar value labels plugin ----
+  const barLabels={id:"barLabels",afterDatasetsDraw(chart){
+    const ctx=chart.ctx;ctx.save();ctx.font="700 12px -apple-system,'Segoe UI',Roboto,sans-serif";ctx.textAlign="center";ctx.textBaseline="bottom";
+    chart.data.datasets.forEach((ds,di)=>{const meta=chart.getDatasetMeta(di);if(meta.hidden)return;ctx.fillStyle="#0c1424";
+      meta.data.forEach((bar,i)=>{const v=ds.data[i];if(v==null||v===0)return;const txt=(typeof v==="number"&&!Number.isInteger(v))?v.toFixed(1):String(v);ctx.fillText(txt,bar.x,bar.y-3);});});
+    ctx.restore();}};
+
+  function destroyCharts(){Object.keys(charts).forEach(k=>{try{charts[k].destroy();}catch(e){}delete charts[k];});}
+  function setState(html){destroyCharts();$("#content").innerHTML=html;}
+
+  function barOpts(){return{responsive:true,maintainAspectRatio:false,animation:{duration:300},layout:{padding:{top:22}},
+    scales:{x:{grid:{display:false},ticks:{color:"#0c1424",font:{size:12,weight:"600"}}},
+      y:{beginAtZero:true,grid:{color:getCss("--line")},ticks:{color:"#0c1424",precision:0,font:{size:12,weight:"600"}}}},
+    plugins:{legend:{position:"top",align:"end",labels:{boxWidth:12,boxHeight:12,color:"#0c1424",font:{size:12,weight:"600"}}},
+      tooltip:{backgroundColor:"#172b4d",padding:10,cornerRadius:8}}};}
+
+  // ---- render ----
+  function render(model){
+    destroyCharts();
+    const created=model._created, resolved=model._resolved;
+    const names=orderTypeNames(Object.keys(model.types).concat(supportedTypes));
+    const tl=names.map(n=>model.types[n]||{name:n,created:0,resolved:0,todo:0,prog:0,done:0,leads:[],cycles:[]});
+    const totC=sum(tl.map(t=>t.created)), totR=sum(tl.map(t=>t.resolved));
+    const todoN=sum(tl.map(t=>t.todo)), progN=sum(tl.map(t=>t.prog)), doneN=sum(tl.map(t=>t.done));
+    const net=totC-totR, completion=totC?Math.round(100*doneN/totC):0;
+    const compColor=completion>=70?"var(--good)":completion>=40?"var(--warn)":"var(--bad)";
+
+    // union work items (dedupe by key)
+    const seen={};workItems=[];
+    [...created,...resolved].forEach(i=>{if(!seen[i.key]){seen[i.key]=1;workItems.push(i);}});
+    const catRank={indeterminate:0,new:1,done:2};
+    const prioRank=n=>{n=(n||"").toLowerCase();if(/(highest|block|critical)/.test(n))return 0;if(/(high|major)/.test(n))return 1;if(/(medium|normal)/.test(n))return 2;if(/(low|minor)/.test(n))return 3;return 4;};
+    workItems.sort((a,b)=>{
+      const ka=(a.fields.status&&a.fields.status.statusCategory?a.fields.status.statusCategory.key:"new");
+      const kb=(b.fields.status&&b.fields.status.statusCategory?b.fields.status.statusCategory.key:"new");
+      return (catRank[ka]-catRank[kb])||(prioRank(a.fields.priority&&a.fields.priority.name)-prioRank(b.fields.priority&&b.fields.priority.name))||a.key.localeCompare(b.key);
+    });
+
+    // chips: union counts by type
+    const unionByType={};workItems.forEach(i=>{const n=i.fields.issuetype?i.fields.issuetype.name:"Unknown";unionByType[n]=(unionByType[n]||0)+1;});
+    const chipNames=orderTypeNames(names);
+
+    const startD=fmtDate(new Date(Date.now()-duration*86400000));
+    const healthTxt=net>0?"Backlog growing":net<0?"Backlog shrinking":"Backlog balanced";
+    const healthColor=net>0?"var(--bad)":net<0?"var(--good)":"var(--muted)";
+    const scale=Math.max(totC,totR,1);
+    const noteCls=net<0?"good":net>0?"bad":"";
+    const noteTxt=net<0?`Backlog shrank by <b>${-net}</b> — resolved (${totR}) outpaced created (${totC}).`
+      :net>0?`Backlog grew by <b>${net}</b> — created (${totC}) outpaced resolved (${totR}).`
+      :`Balanced — created and resolved both <b>${totC}</b>.`;
+
+    const root=el("div");
+    if(totC===0&&totR===0)
+      root.appendChild(el("div","banner",`No issues were created or resolved in <b>${esc(projectName)}</b> during the ${periodLabel()}. All supported work item types are still shown below (at zero) — widen the period or pick a more active project.`));
+
+    // top cards
+    const cards=el("div","cards");
+    cards.innerHTML=`
+      <div class="card hero">
+        <span class="badge"><span class="live"></span>LIVE BACKLOG</span>
+        <h2>${esc(projectName)}</h2>
+        <div class="goal">Window: ${periodLabel()} &middot; ${startD} → today</div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Completion</div>
+        <div class="cexp">Work items <b>created</b> in the ${periodLabel()} (all types), by status today.</div>
+        <div class="completion-body">
+          <div class="donut-wrap"><canvas id="c_donut"></canvas>
+            <div class="donut-center"><div class="n" style="color:${compColor}">${completion}%</div><div class="l">done</div></div>
+          </div>
+          <div class="legend">
+            <div class="li"><span class="dot" style="background:var(--done)"></span>Done <b>${doneN}</b></div>
+            <div class="li"><span class="dot" style="background:var(--prog)"></span>In progress <b>${progN}</b></div>
+            <div class="li"><span class="dot" style="background:var(--todo)"></span>To do <b>${todoN}</b></div>
+          </div>
+        </div>
+        <div class="csub">${doneN} of ${totC} created items now done</div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Flow health</div>
+        <div class="cexp">Created vs. resolved in the ${periodLabel()} (all types, by date).</div>
+        <div class="health-status" style="color:${healthColor}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${net>0?'<polyline points="17 7 17 17 7 17"/><line x1="17" y1="17" x2="5" y2="5"/>':net<0?'<polyline points="17 17 17 7 7 7"/><line x1="17" y1="7" x2="5" y2="19"/>':'<line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/>'}</svg>
+          ${healthTxt}
+        </div>
+        <div class="meter"><div class="mh"><span>Created (inflow)</span><b>${totC}</b></div><div class="track"><i style="width:${Math.round(100*totC/scale)}%;background:var(--accent)"></i></div></div>
+        <div class="meter"><div class="mh"><span>Resolved (throughput)</span><b>${totR}</b></div><div class="track"><i style="width:${Math.round(100*totR/scale)}%;background:var(--done)"></i></div></div>
+        <div class="csub" style="margin-top:auto">Net flow <b style="color:${healthColor}">${net>0?"+":""}${net}</b> this period</div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Throughput</div>
+        <div class="bignum">${totR}</div>
+        <div class="bignum-sub">work items resolved · ${periodLabel()}</div>
+        <div class="cexp">Any issue type with a resolution date in the period (stories, tasks, bugs, epics…).</div>
+        <div class="note ${noteCls}">${noteTxt}</div>
+      </div>`;
+    root.appendChild(cards);
+
+    // chips
+    root.appendChild(el("div","section-label",`Work items by type · ${workItems.length} in period`));
+    const chips=el("div","chips");
+    chips.innerHTML=chipNames.map(n=>{const m=typeMeta(n);const c=unionByType[n]||0;
+      return `<div class="chip"><div class="tile" style="background:${m.c}">${tsvg(m.i,16)}</div><div><div class="cn">${c}</div><div class="cl">${esc(n)}</div></div></div>`;}).join("");
+    root.appendChild(chips);
+
+    // trend (navy)
+    const pt=el("div","panel navy");
+    pt.innerHTML=`<h3>Backlog flow</h3><div class="desc">Cumulative work items created vs. resolved across the ${periodLabel()}.</div><div class="chart-box"><canvas id="c_trend"></canvas></div>`;
+    root.appendChild(pt);
+
+    // fix version release-progress section (placed above Created vs. resolved)
+    const pv=el("div","panel");
+    pv.innerHTML=`<h3>Release progress by Fix Version</h3>
+      <div class="desc">All work items assigned to each version, by current status (whole release scope — <b>not</b> limited by the period above). Pick which versions to show.</div>
+      <div id="verControl"></div>
+      <div id="verCards" class="ver-grid"></div>`;
+    root.appendChild(pv);
+
+    // created vs resolved bars
+    const p1=el("div","panel");
+    p1.innerHTML=`<h3>Created vs. resolved by work item</h3><div class="desc">Inflow against throughput per type. Bars above the resolved value mean the backlog is growing for that type.</div><div class="chart-box"><canvas id="c_flow"></canvas></div>`;
+    root.appendChild(p1);
+
+    // lead/cycle
+    const p2=el("div","panel");
+    p2.innerHTML=`<h3>Lead time &amp; cycle time by work item</h3><div class="chart-box"><canvas id="c_time"></canvas></div><div id="timeTbl" style="margin-top:14px"></div>
+      <div class="desc" style="margin:12px 0 0">Resolved in the ${periodLabel()}. <b>Lead time</b> = created → resolved (includes backlog wait). <b>Cycle time</b> = first In&nbsp;Progress → resolved (active work). The gap is queue/wait time.</div>
+      <div class="prog-line" id="cycProg"></div>`;
+    root.appendChild(p2);
+
+    // work items table
+    const p3=el("div","panel");
+    p3.innerHTML=`<h3>${esc(projectName)} · Work items <span style="color:var(--faint);font-weight:600;font-size:13px">${workItems.length} in period</span></h3>
+      <div style="overflow-x:auto;margin-top:8px"><table><thead><tr>
+        <th>Key</th><th>Priority</th><th>Type</th><th>Title</th><th>Status</th><th>Assignee</th>
+      </tr></thead><tbody id="wiBody"></tbody></table></div>
+      <div class="pager" id="wiPager"></div>`;
+    root.appendChild(p3);
+
+    $("#content").innerHTML="";$("#content").appendChild(root);
+
+    // charts
+    const labels=tl.map(t=>t.name);
+    charts.donut=new Chart($("#c_donut"),{type:"doughnut",
+      data:{labels:["To Do","In Progress","Done"],datasets:[{data:[todoN,progN,doneN],backgroundColor:[getCss("--todo"),getCss("--prog"),getCss("--done")],borderColor:"#fff",borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:"72%",animation:{duration:300},plugins:{legend:{display:false},
+        tooltip:{backgroundColor:"#172b4d",padding:9,cornerRadius:8,callbacks:{label:c=>` ${c.label}: ${c.parsed} (${totC?Math.round(100*c.parsed/totC):0}%)`}}}}});
+
+    const tr=buildTrend(created,resolved);
+    charts.trend=new Chart($("#c_trend"),{type:"line",
+      data:{labels:tr.labels,datasets:[
+        {label:"Created",data:tr.created,borderColor:"#6ea8ff",backgroundColor:"rgba(110,168,255,.16)",fill:true,tension:.25,borderWidth:2.5,pointRadius:0,pointHoverRadius:4},
+        {label:"Resolved",data:tr.resolved,borderColor:"#36d27a",backgroundColor:"rgba(54,210,122,.14)",fill:true,tension:.25,borderWidth:2.5,pointRadius:0,pointHoverRadius:4}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},interaction:{mode:"index",intersect:false},
+        scales:{x:{grid:{color:"rgba(255,255,255,.07)"},ticks:{color:"#9fb0cd",font:{size:11},maxTicksLimit:8}},
+          y:{beginAtZero:true,grid:{color:"rgba(255,255,255,.08)"},ticks:{color:"#9fb0cd",precision:0,font:{size:11}}}},
+        plugins:{legend:{position:"top",align:"end",labels:{boxWidth:12,boxHeight:12,color:"#dce6ff",font:{size:12}}},
+          tooltip:{backgroundColor:"#0c1730",padding:10,cornerRadius:8}}}});
+
+    charts.flow=new Chart($("#c_flow"),{type:"bar",
+      data:{labels,datasets:[
+        {label:"Created",data:tl.map(t=>t.created),backgroundColor:getCss("--accent"),borderRadius:5,maxBarThickness:46},
+        {label:"Resolved",data:tl.map(t=>t.resolved),backgroundColor:getCss("--done"),borderRadius:5,maxBarThickness:46}
+      ]},options:barOpts(),plugins:[barLabels]});
+
+    const timeOpts=barOpts();
+    timeOpts.plugins.tooltip.callbacks={label:c=>{const m=c.datasetIndex===0?"Average Lead Time":"Average Cycle Time";const v=c.parsed.y;return v==null?`${m}: –`:`${m}: ${v} days`;}};
+    charts.time=new Chart($("#c_time"),{type:"bar",
+      data:{labels,datasets:[
+        {label:"Avg lead (in days)",data:tl.map(t=>round1(mean(t.leads))),backgroundColor:"#5BD2F0",borderRadius:5,maxBarThickness:46},
+        {label:"Avg cycle (in days)",data:tl.map(()=>null),backgroundColor:"#f5871f",borderRadius:5,maxBarThickness:46}
+      ]},options:timeOpts,plugins:[barLabels]});
+
+    renderTimeTable(tl,false);
+    page=0;renderWorkPage();
+    setupVersionSection(model._versionStats||[]);
+    computeCycle(model,tl);
+  }
+
+  function renderTimeTable(tl,ready){
+    const rows=tl.map(t=>{const m=typeMeta(t.name);
+      return `<tr><td><span style="display:inline-flex;align-items:center;gap:7px;font-weight:600"><span class="dot" style="background:${m.c}"></span>${esc(t.name)}</span></td>
+        <td>${t.resolved}</td><td>${fmtD(mean(t.leads))}</td><td>${fmtD(median(t.leads))}</td>
+        <td>${ready?fmtD(mean(t.cycles)):"…"}</td><td>${ready?fmtD(median(t.cycles)):"…"}</td>
+        <td style="color:var(--muted)">${ready?(t.cycles.length+"/"+t.resolved):"…"}</td></tr>`;}).join("");
+    $("#timeTbl").innerHTML=`<table class="lead-tbl"><thead><tr><th>Work item</th><th>Resolved</th><th>Avg lead</th><th>Median lead</th><th>Avg cycle</th><th>Median cycle</th><th>Cycle n</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function renderWorkPage(){
+    const body=$("#wiBody");if(!body)return;
+    const total=workItems.length, pages=Math.max(1,Math.ceil(total/ROWS));
+    page=Math.min(page,pages-1);
+    const slice=workItems.slice(page*ROWS,page*ROWS+ROWS);
+    body.innerHTML=slice.map(i=>{
+      const f=i.fields||{};const tm=typeMeta(f.issuetype?f.issuetype.name:"");
+      const pm=prioMeta(f.priority?f.priority.name:"");
+      const sname=(f.status?f.status.name:"").toUpperCase();
+      const asg=f.assignee?f.assignee.displayName:null;
+      const ava=asg?`<span class="ava" style="background:${avaColor(asg)}">${esc(initials(asg))}</span><span>${esc(asg)}</span>`:`<span class="unassigned">— Unassigned</span>`;
+      return `<tr>
+        <td><a class="keylink" href="${esc(i.webUrl||"#")}" target="_blank" rel="noopener">${esc(i.key)}</a></td>
+        <td>${f.priority?`<span class="pill ${pm.cls}">${pm.ic}${esc(f.priority.name).toUpperCase()}</span>`:"—"}</td>
+        <td><span class="ttile" style="background:${tm.c}" title="${esc(f.issuetype?f.issuetype.name:"")}">${tsvg(tm.i,15)}</span></td>
+        <td class="titlecell">${esc(f.summary||"")}</td>
+        <td><span class="pill ${statusMeta(f)}">${esc(sname)}</span></td>
+        <td><div class="who">${ava}</div></td>
+      </tr>`;}).join("")||`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:28px">No work items in this period.</td></tr>`;
+    const from=total?page*ROWS+1:0, to=Math.min(total,(page+1)*ROWS);
+    $("#wiPager").innerHTML=`<span>Showing <b>${from}–${to}</b> of <b>${total}</b></span>
+      <div class="pg">
+        <button ${page===0?"disabled":""} data-go="prev">‹</button>
+        <button class="cur">${page+1}</button>
+        <button ${page>=pages-1?"disabled":""} data-go="next">›</button>
+      </div>`;
+    $("#wiPager").querySelectorAll("button[data-go]").forEach(b=>b.addEventListener("click",()=>{page+=b.dataset.go==="next"?1:-1;renderWorkPage();}));
+  }
+
+  // ---- fix version section ----
+  function computeVersionStats(issues){
+    const map={};
+    issues.forEach(i=>{
+      const f=i.fields||{};
+      const b=bucketCat(f.status&&f.status.statusCategory?f.status.statusCategory.key:"");
+      const tn=f.issuetype?f.issuetype.name:"Unknown";
+      (f.fixVersions||[]).forEach(v=>{
+        const o=map[v.name]||(map[v.name]={name:v.name,released:!!v.released,total:0,todo:0,prog:0,done:0,types:{},byStatus:{todo:{},prog:{},done:{}}});
+        o.total++; o[b]++; if(v.released)o.released=true;
+        o.types[tn]=(o.types[tn]||0)+1;
+        o.byStatus[b][tn]=(o.byStatus[b][tn]||0)+1;
+      });
+    });
+    return Object.values(map).sort((a,b)=>(a.released-b.released)||a.name.localeCompare(b.name,undefined,{numeric:true}));
+  }
+
+  function setupVersionSection(stats){
+    const ctrl=$("#verControl"); if(!ctrl) return;
+    if(!stats.length){ ctrl.innerHTML=""; $("#verCards").innerHTML=`<div class="state" style="padding:30px">No Fix Versions are set on work items in this project.</div>`; return; }
+    if(stats.length>1){
+      ctrl.innerHTML=`<div class="ms">
+        <button class="ms-btn" id="msBtn"></button>
+        <div class="ms-panel hidden" id="msPanel">
+          <div class="ms-actions"><button data-act="all">Select all</button><button data-act="none">Clear</button></div>
+          ${stats.map(v=>`<label><input type="checkbox" value="${esc(v.name)}" ${selectedVersions.has(v.name)?"checked":""}> ${esc(v.name)} <span class="vcount">${v.total}</span></label>`).join("")}
+        </div></div>`;
+      const btn=$("#msBtn"), panel=$("#msPanel");
+      const updBtn=()=>btn.textContent=`Versions: ${selectedVersions.size} of ${stats.length} ▾`;
+      updBtn();
+      btn.addEventListener("click",e=>{e.stopPropagation();panel.classList.toggle("hidden");});
+      panel.addEventListener("click",e=>e.stopPropagation());
+      panel.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.addEventListener("change",()=>{
+        if(cb.checked)selectedVersions.add(cb.value);else selectedVersions.delete(cb.value);
+        updBtn(); renderVersionCards(stats);
+      }));
+      panel.querySelectorAll("button[data-act]").forEach(b=>b.addEventListener("click",()=>{
+        selectedVersions = b.dataset.act==="all" ? new Set(stats.map(v=>v.name)) : new Set();
+        panel.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.checked=selectedVersions.has(cb.value));
+        updBtn(); renderVersionCards(stats);
+      }));
+    } else { ctrl.innerHTML=""; }
+    renderVersionCards(stats);
+  }
+
+  function verTypeChips(map){
+    const keys=orderTypeNames(Object.keys(map||{}));
+    if(!keys.length) return `<span class="vt-none">—</span>`;
+    return keys.map(n=>{const m=typeMeta(n);return `<span class="vt"><span class="ttile" style="background:${m.c}">${tsvg(m.i,12)}</span><b>${map[n]}</b> ${esc(pluralize(n,map[n]))}</span>`;}).join("");
+  }
+  function verSub(label,cvar,total,map){
+    return `<div class="vsub"><div class="vsub-h"><i class="dot" style="background:var(${cvar})"></i>${label}<span class="vsub-n">${total}</span></div><div class="vsub-types">${verTypeChips(map)}</div></div>`;
+  }
+
+  function renderVersionCards(stats){
+    const wrap=$("#verCards"); if(!wrap) return;
+    const sel=stats.filter(v=>selectedVersions.has(v.name));
+    if(!sel.length){ wrap.innerHTML=`<div class="state" style="padding:30px">No versions selected.</div>`; return; }
+    wrap.innerHTML=sel.map(v=>{
+      const pct=v.total?Math.round(100*v.done/v.total):0;
+      const w=k=>v.total?(100*v[k]/v.total):0;
+      return `<div class="ver-card">
+        <div class="ver-head"><span class="ver-name">${esc(v.name)}</span><span class="ver-badge ${v.released?"vb-rel":"vb-unrel"}">${v.released?"Released":"Unreleased"}</span></div>
+        <div class="ver-pct"><span class="big">${pct}%</span>done · ${v.total} work item${v.total===1?"":"s"}</div>
+        <div class="seg" title="Done ${v.done} · In Progress ${v.prog} · To Do ${v.todo}">
+          <i style="width:${w("done")}%;background:var(--done)"></i>
+          <i style="width:${w("prog")}%;background:var(--prog)"></i>
+          <i style="width:${w("todo")}%;background:var(--todo)"></i>
+        </div>
+        <div class="ver-subs">
+          ${verSub("To Do","--todo",v.todo,v.byStatus&&v.byStatus.todo)}
+          ${verSub("In Progress","--prog",v.prog,v.byStatus&&v.byStatus.prog)}
+          ${verSub("Done","--done",v.done,v.byStatus&&v.byStatus.done)}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  async function computeCycle(model,tl){
+    const token=loadToken;
+    const items=(model._resolved||[]).filter(i=>i.fields&&i.fields.resolutiondate)
+      .sort((a,b)=>new Date(b.fields.resolutiondate)-new Date(a.fields.resolutiondate)).slice(0,CYCLE_CAP);
+    const byName={};tl.forEach(t=>{t.cycles=[];byName[t.name]=t;});
+    let done=0,ok=0;const prog=$("#cycProg");
+    for(const it of items){
+      if(token!==loadToken)return;const f=it.fields||{};
+      try{const s=await inProgressStart(it.key,model.catMap);if(s){const c=days(new Date(f.resolutiondate)-new Date(s));if(c>=0){const t=byName[f.issuetype?f.issuetype.name:"Unknown"];if(t){t.cycles.push(c);ok++;}}}}catch(e){}
+      done++;if(prog)prog.textContent=`Cycle time: analysed ${done}/${items.length} resolved issues…`;
+    }
+    if(token!==loadToken)return;
+    if(charts.time){charts.time.data.datasets[1].data=tl.map(t=>round1(mean(t.cycles)));charts.time.update();}
+    renderTimeTable(tl,true);
+    const capped=(model._resolved||[]).filter(i=>i.fields&&i.fields.resolutiondate).length>CYCLE_CAP;
+    if(prog)prog.textContent=`Cycle time from issue history of ${ok} resolved issue(s)`+(capped?` (most recent ${CYCLE_CAP} of ${(model._resolved||[]).length}).`:".");
+  }
+
+  // ---- orchestration ----
+  async function loadDashboard(){
+    if(!projectKey)return;const token=++loadToken;saveState();
+    $("#brandSub").textContent=`${projectName} · ${periodLabel()} · live data`;
+    setState(`<div class="panel"><div class="state"><div class="spinner"></div><div style="font-weight:700;color:var(--ink)">Loading ${esc(projectName)}…</div><div style="margin-top:4px">Fetching created &amp; resolved work items for the ${periodLabel()}.</div></div></div>`);
+    try{
+      const fields=["issuetype","created","resolutiondate","status","priority","summary","assignee"];
+      // Run sequentially, NOT in parallel: concurrent calls to the same MCP tool can
+      // collide in the read cache and return each other's results (e.g. resolved getting
+      // the created set). Sequential awaits guarantee distinct, correct results per query.
+      // Sub-tasks are excluded from all calculations (standardIssueTypes() = non-subtask types),
+      // with a defensive client-side filter on the subtask flag as a safety net.
+      const noSub=i=>!(i.fields&&i.fields.issuetype&&i.fields.issuetype.subtask);
+      const created=(await searchAll(`project = "${projectKey}" AND issuetype in standardIssueTypes() AND created >= -${duration}d ORDER BY created DESC`,fields,PAGE_CAP)).filter(noSub);
+      if(token!==loadToken)return;
+      const resolved=(await searchAll(`project = "${projectKey}" AND issuetype in standardIssueTypes() AND resolutiondate >= -${duration}d ORDER BY resolutiondate DESC`,fields,PAGE_CAP)).filter(noSub);
+      if(token!==loadToken)return;
+      // Fix Version progress — whole release scope (not period-limited). Only Story, Task, Bug, Epic
+      // (no sub-tasks, no other types like Improvement/Idea), enforced in JQL and client-side.
+      const verTypes=new Set(["story","task","bug","epic"]);
+      const verIssues=(await searchAll(`project = "${projectKey}" AND issuetype in ("Story","Task","Bug","Epic") AND fixVersion is not EMPTY ORDER BY fixVersion ASC`,["status","fixVersions","issuetype"],PAGE_CAP))
+        .filter(i=>i.fields&&i.fields.issuetype&&verTypes.has((i.fields.issuetype.name||"").toLowerCase()));
+      if(token!==loadToken)return;
+      const vstats=computeVersionStats(verIssues);
+      const vnames=vstats.map(v=>v.name);
+      if(versionProject!==projectKey){ selectedVersions=new Set(vnames); versionProject=projectKey; }
+      else { selectedVersions=new Set([...selectedVersions].filter(n=>vnames.includes(n))); if(!selectedVersions.size) selectedVersions=new Set(vnames); }
+      const model=analyze(created,resolved,supportedTypes);model._created=created;model._resolved=resolved;model._versionStats=vstats;
+      render(model);
+    }catch(e){
+      if(token!==loadToken)return;
+      setState(`<div class="panel"><div class="err"><b>Couldn't load Jira data.</b><br>${esc(e.message||String(e))}<br><br>Try Refresh, pick another project, or check the Jira connector is still authorised.</div></div>`);
+    }
+  }
+
+  async function init(){
+    $("#dur").addEventListener("change",e=>{duration=+e.target.value;loadDashboard();});
+    $("#proj").addEventListener("change",e=>{const o=e.target.selectedOptions[0];if(!o||!o.value)return;projectKey=o.value;projectName=o.dataset.name||o.value;supportedTypes=parseTypes(o.dataset.types);if(shell&&shell.setProjectContext)shell.setProjectContext(projectKey,projectName);loadDashboard();});
+    $("#refresh").addEventListener("click",()=>{const b=$("#refresh");b.classList.add("spin");setTimeout(()=>b.classList.remove("spin"),550);loadDashboard();});
+    document.addEventListener("click",()=>{const p=$("#msPanel");if(p)p.classList.add("hidden");});
+
+    const st=loadState();
+    if(st.duration){duration=st.duration;$("#dur").value=String(duration);}
+
+    try{const res=await mcp(T.res,{});if(Array.isArray(res)&&res[0]&&res[0].id)cloudId=res[0].id;}catch(e){}
+
+    try{
+      const data=await mcp(T.projects,{cloudId,action:"view",maxResults:50,expandIssueTypes:true});
+      const vals=(data&&data.values)||[];vals.sort((a,b)=>a.name.localeCompare(b.name));
+      const sel=$("#proj");sel.innerHTML="";
+      const ph=el("option");ph.value="";ph.textContent="Select a project…";sel.appendChild(ph);
+      vals.forEach(p=>{const o=el("option");o.value=p.key;o.dataset.name=p.name;o.dataset.types=JSON.stringify(orderTypeNames((p.issueTypes||[]).filter(t=>!t.subtask).map(t=>t.name)));o.textContent=`${p.name} · ${p.key}`;sel.appendChild(o);});
+      const want=(pendingProjectKey&&vals.find(p=>p.key===pendingProjectKey))?pendingProjectKey:(st.projectKey&&vals.find(p=>p.key===st.projectKey)?st.projectKey:(vals[0]&&vals[0].key));pendingProjectKey=null;
+      if(want){sel.value=want;const o=sel.selectedOptions[0];projectKey=want;projectName=o?o.dataset.name:want;supportedTypes=parseTypes(o?o.dataset.types:null);if(shell&&shell.setProjectContext)shell.setProjectContext(projectKey,projectName);loadDashboard();}
+    }catch(e){$("#proj").innerHTML="<option>Error loading projects</option>";setState(`<div class="panel"><div class="err"><b>Couldn't load projects.</b><br>${esc(e.message||String(e))}</div></div>`);}
+  }
+
+  let __selectProject=function(key){
+    const sel=$("#proj"); if(!sel) return;
+    const o=[...sel.options].find(x=>x.value===key); if(!o) return;
+    sel.value=key; projectKey=key; projectName=o.dataset.name||key; supportedTypes=parseTypes(o.dataset.types);
+    if(shell&&shell.setProjectContext)shell.setProjectContext(projectKey,projectName);
+    loadDashboard();
+  };
+  async function activate(params){
+    if(params&&params.projectKey) pendingProjectKey=params.projectKey;
+    if(!__inited){ __inited=true;
+      if(window.cowork&&window.cowork.callMcpTool){ await init(); }
+      else { const c=$("#content"); if(c) c.innerHTML='<div class="panel"><div class="err">This dashboard must run inside Cowork (it needs the Jira connector).</div></div>'; }
+      return;
+    }
+    // Re-fetch fresh on every activation so tab switches are always up to date.
+    if(params&&params.projectKey){ __selectProject(params.projectKey); }
+    else if(projectKey){ loadDashboard(); }
+  }
+  // Abort the in-flight cycle-time background job (up to 60 getJiraIssue calls) when leaving
+  // this tab so it stops hogging the shared serialized call-queue and starving other tabs.
+  return { activate, refresh:()=>{ if(projectKey) loadDashboard(); }, deactivate:()=>{ loadToken++; } };
+}
+
+function createSprintView(root, host, shell){
+
+const CLOUD_ID = "YOUR_CLOUD_ID";
+const SITE_HOST = "your-company.atlassian.net";
+const SPRINT_FIELDS = ["customfield_10007", "customfield_10020"];
+const PAGE_SIZE = 15;
+
+const state = {
+  projects: [],
+  selectedProjectKey: null,
+  issues: [],
+  sprints: [],
+  selectedSprintId: null,
+  currentPage: 1,
+};
+
+const $ = (id) => root.getElementById(id);
+let pendingProjectKey = null, __inited = false;
+function notifyContext(key){ const p = state.projects.find(x => x.key === key); if (shell && shell.setProjectContext) shell.setProjectContext(key, p ? p.name : key); }
+function setNote(msg){ const n = $("noteBox"); if (n) n.innerHTML = msg ? `<div class="info">${msg}</div>` : ""; }
+function selectProject(key){
+  const filtered = state.projects.filter(p => p.projectTypeKey === "software");
+  if (!filtered.some(p => p.key === key)) {
+    const rp = state.projects.find(p => p.key === key);
+    const cur = state.projects.find(p => p.key === state.selectedProjectKey);
+    setNote(`<strong>${escapeHtml(rp ? rp.name : key)}</strong> isn't a Scrum software project, so it has no sprints. Showing <strong>${escapeHtml(cur ? cur.name : (state.selectedProjectKey || "another project"))}</strong> instead.`);
+    return;
+  }
+  setNote("");
+  state.selectedProjectKey = key; $("projectSelect").value = key; state.currentPage = 1; notifyContext(key); loadIssuesForProject(key);
+}
+const errBox = () => $("errBox");
+
+function setError(msg) {
+  errBox().innerHTML = msg ? `<div class="error">${msg}</div>` : "";
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+async function callMcp(tool, args) {
+  if (!window.cowork || !window.cowork.callMcpTool) throw new Error("Cowork MCP bridge not available");
+  const res = await window.cowork.callMcpTool(tool, args);
+  if (res && res.isError) { const m = (res.content && res.content[0] && res.content[0].text) || "tool error"; throw new Error(m); }
+  if (res && res.content && Array.isArray(res.content)) {
+    const txt = res.content.map(c => c.text || "").join("");
+    try { const parsed = JSON.parse(txt); if (parsed != null) return parsed; } catch (e) {}
+  }
+  if (res && res.structuredContent != null) return res.structuredContent;
+  if (typeof res === "string") { try { return JSON.parse(res); } catch (e) { return res; } }
+  return res;
+}
+function normSearch(res) {
+  const iss = res && res.issues;
+  if (Array.isArray(iss)) return { list: iss, next: res.isLast ? undefined : res.nextPageToken };
+  if (iss && Array.isArray(iss.nodes)) { const pi = iss.pageInfo || {}; return { list: iss.nodes, next: pi.hasNextPage ? pi.endCursor : undefined }; }
+  return { list: [], next: undefined };
+}
+
+async function loadProjects() {
+  try {
+    const res = await callMcp("mcp__YOUR_CONNECTOR_ID__getVisibleJiraProjects", {
+      cloudId: CLOUD_ID, action: "view", expandIssueTypes: false, maxResults: 50
+    });
+    state.projects = (res && res.values) ? res.values : [];
+    renderProjects();
+  } catch (err) {
+    setError("Failed to load projects: " + (err.message || err));
+  }
+}
+
+function renderProjects() {
+  const sel = $("projectSelect");
+  const filtered = state.projects.filter(p => p.projectTypeKey === "software");
+  if (!filtered.length) { sel.innerHTML = `<option value="">No projects match</option>`; return; }
+  sel.innerHTML = filtered.map(p =>
+    `<option value="${escapeHtml(p.key)}">${escapeHtml(p.name)} · ${escapeHtml(p.key)}</option>`
+  ).join("");
+  const requested = pendingProjectKey;
+  let want = state.selectedProjectKey;
+  if (requested && filtered.some(p => p.key === requested)) want = requested;
+  if (!want || !filtered.some(p => p.key === want)) want = filtered[0].key;
+  pendingProjectKey = null;
+  state.selectedProjectKey = want;
+  sel.value = want;
+  notifyContext(want);
+  if (requested && requested !== want && !filtered.some(p => p.key === requested)) {
+    const rp = state.projects.find(p => p.key === requested);
+    const wp = state.projects.find(p => p.key === want);
+    setNote(`<strong>${escapeHtml(rp ? rp.name : requested)}</strong> isn't a Scrum software project, so it has no sprints. Showing <strong>${escapeHtml(wp ? wp.name : want)}</strong> instead.`);
+  } else setNote("");
+  loadIssuesForProject(want);
+}
+
+let __nonce = 0;
+function bustJql(q){
+  const tag = "cb" + Date.now().toString(36) + (__nonce++).toString(36);
+  const clause = ' AND (created >= "1970-01-01" OR summary ~ "' + tag + '")';
+  const i = q.search(/\bORDER\s+BY\b/i);
+  return i >= 0 ? (q.slice(0, i) + clause + " " + q.slice(i)) : (q + clause);
+}
+async function loadIssuesForProject(projectKey) {
+  state.issues = []; state.sprints = []; state.selectedSprintId = null; state.currentPage = 1;
+  $("sprintSelect").innerHTML = `<option value="">Loading sprints…</option>`;
+  $("content").innerHTML = `<div class="empty"><span class="spinner"></span> Loading issues for <strong>${escapeHtml(projectKey)}</strong>…</div>`;
+  setError("");
+  try {
+    const all = [];
+    let pageToken; let pages = 0;
+    const fields = ["summary", "status", "issuetype", "assignee", "project", "priority", "resolutiondate", ...SPRINT_FIELDS];
+    const __sprJql = bustJql(`project = ${projectKey} AND sprint is not EMPTY ORDER BY updated DESC`);
+    do {
+      const args = { cloudId: CLOUD_ID, jql: __sprJql, fields, maxResults: 100 };
+      if (pageToken) args.nextPageToken = pageToken;
+      const res = await callMcp("mcp__YOUR_CONNECTOR_ID__searchJiraIssuesUsingJql", args);
+      const norm = normSearch(res);
+      all.push(...norm.list);
+      pageToken = norm.next;
+      if (++pages > 20) break;
+    } while (pageToken);
+    state.issues = all;
+    indexSprints();
+    renderSprintSelect();
+    renderContent();
+  } catch (err) {
+    setError("Failed to load issues: " + (err.message || err));
+    $("content").innerHTML = "";
+  }
+}
+
+function getSprintField(issue) {
+  for (const f of SPRINT_FIELDS) if (issue.fields && Array.isArray(issue.fields[f])) return issue.fields[f];
+  return [];
+}
+
+function indexSprints() {
+  const map = new Map();
+  for (const issue of state.issues) {
+    for (const s of getSprintField(issue)) {
+      if (!map.has(s.id)) map.set(s.id, { ...s, issues: [] });
+      map.get(s.id).issues.push(issue);
+    }
+  }
+  const arr = Array.from(map.values());
+  const order = { active: 0, future: 1, closed: 2 };
+  arr.sort((a, b) => {
+    if (order[a.state] !== order[b.state]) return order[a.state] - order[b.state];
+    if (a.state === "closed") return new Date(b.endDate || 0) - new Date(a.endDate || 0);
+    return new Date(a.startDate || 0) - new Date(b.startDate || 0);
+  });
+  state.sprints = arr;
+  if (arr.length) {
+    const active = arr.find(s => s.state === "active");
+    state.selectedSprintId = (active || arr[0]).id;
+  }
+}
+
+function renderSprintSelect() {
+  const sel = $("sprintSelect");
+  if (!state.sprints.length) { sel.innerHTML = `<option value="">No sprints</option>`; return; }
+  const groups = state.sprints.reduce((acc, s) => { (acc[s.state] = acc[s.state] || []).push(s); return acc; }, {});
+  const labels = { active: "Active", future: "Future", closed: "Completed" };
+  let html = "";
+  for (const k of ["active", "future", "closed"]) {
+    if (groups[k]?.length) {
+      html += `<optgroup label="${labels[k]} (${groups[k].length})">`;
+      for (const s of groups[k]) html += `<option value="${s.id}">${escapeHtml(s.name)}</option>`;
+      html += `</optgroup>`;
+    }
+  }
+  sel.innerHTML = html;
+  if (state.selectedSprintId) sel.value = String(state.selectedSprintId);
+}
+
+function getStatusCategoryKey(i) { return i?.fields?.status?.statusCategory?.key || "new"; }
+function isDone(i) { return getStatusCategoryKey(i) === "done"; }
+function isInProgress(i) { return getStatusCategoryKey(i) === "indeterminate"; }
+function fmtDateShort(s) { if (!s) return "—"; return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+
+function firstLastInitials(displayName) {
+  if (!displayName) return "?";
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function statusPill(issue) {
+  const cat = getStatusCategoryKey(issue);
+  const label = issue?.fields?.status?.name || cat;
+  const cls = cat === "done" ? "done" : cat === "indeterminate" ? "inprogress" : "todo";
+  return `<span class="pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+const PRIORITY_ICONS = {
+  blocker: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.6 2h6.8L22 8.6v6.8L15.4 22H8.6L2 15.4V8.6L8.6 2z"/><path d="M7 12h10" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
+  highest: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4-1 3 1 4 2 3 0-3-1-5 1-9z"/></svg>`,
+  critical: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L1 21h22L12 2z"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><circle cx="12" cy="17.5" r="1.2" fill="#fff"/></svg>`,
+  high: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 13 12 7 18 13"/><polyline points="6 19 12 13 18 19"/></svg>`,
+  major: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>`,
+  medium: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>`,
+  low: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`,
+  minor: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 8h12l-6 8z"/></svg>`,
+  lowest: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 5 12 11 18 5"/><polyline points="6 11 12 17 18 11"/></svg>`,
+  trivial: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="12" x2="18" y2="12"/></svg>`,
+  unknown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 4"/><circle cx="12" cy="17" r="0.7" fill="currentColor"/></svg>`,
+};
+
+function priorityKey(name) {
+  if (!name) return "unknown";
+  const lc = name.toLowerCase();
+  const known = ["blocker","highest","critical","high","major","medium","low","minor","lowest","trivial"];
+  return known.includes(lc) ? lc : "unknown";
+}
+
+function priorityCell(priority) {
+  const name = priority?.name || "None";
+  const key = priorityKey(priority?.name);
+  const icon = PRIORITY_ICONS[key] || PRIORITY_ICONS.unknown;
+  return `<span class="prio ${key}" title="${escapeHtml(name)} priority">
+    <span class="prio-ico">${icon}</span>
+    <span class="prio-label">${escapeHtml(name)}</span>
+  </span>`;
+}
+
+function issueTypeIcon(typeName) {
+  const name = (typeName || "").toLowerCase();
+  let cls = "task", svg = "";
+  if (name.includes("bug")) {
+    cls = "bug"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/><path d="M2 12h4M18 12h4M12 2v4M12 18v4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+  } else if (name.includes("story")) {
+    cls = "story"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14v16l-7-4-7 4z"/></svg>`;
+  } else if (name.includes("epic")) {
+    cls = "epic"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>`;
+  } else if (name.includes("sub")) {
+    cls = "subtask"; svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 5v9a3 3 0 0 0 3 3h11"/><path d="M14 12l5 5-5 5"/></svg>`;
+  } else if (name.includes("improvement")) {
+    cls = "improvement"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4" stroke="currentColor" stroke-width="2" fill="none"/></svg>`;
+  } else if (name.includes("idea")) {
+    cls = "idea"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 18h6v2H9zM12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`;
+  } else if (name.includes("customer")) {
+    cls = "customer"; svg = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
+  } else {
+    cls = "task"; svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>`;
+  }
+  return `<span class="itype ${cls}" title="${escapeHtml(typeName || "")}">${svg}</span>`;
+}
+
+function assigneeCell(assignee) {
+  if (!assignee) {
+    return `<span class="assignee un">
+      <span class="avatar unassigned">—</span>
+      <span class="assignee-name">Unassigned</span>
+    </span>`;
+  }
+  const name = assignee.displayName || "Unknown";
+  return `<span class="assignee">
+    <span class="avatar" title="${escapeHtml(name)}">${escapeHtml(firstLastInitials(name))}</span>
+    <span class="assignee-name">${escapeHtml(name)}</span>
+  </span>`;
+}
+
+function pluralize(name, count) {
+  if (count === 1) return name;
+  if (/[^aeiou]y$/i.test(name)) return name.slice(0, -1) + "ies";
+  if (/(s|x|z|ch|sh)$/i.test(name)) return name + "es";
+  return name + "s";
+}
+
+function getIssueTypeBreakdown(issues) {
+  const counts = new Map();
+  for (const it of issues) {
+    const name = it?.fields?.issuetype?.name || "Unknown";
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function backlogSummaryHtml(issues) {
+  if (!issues.length) return "";
+  const breakdown = getIssueTypeBreakdown(issues);
+  const total = issues.length;
+  return `
+    <div>
+      <div class="backlog-eyebrow">Sprint Backlog &middot; ${total} item${total===1?"":"s"} by Type</div>
+      <div class="backlog-summary">
+        ${breakdown.map(({ name, count }) => {
+          const label = pluralize(name, count);
+          return `<div class="backlog-card" title="${count} ${escapeHtml(label)} in this sprint">
+            ${issueTypeIcon(name)}
+            <div class="bs-meta">
+              <div class="bs-num">${count}</div>
+              <div class="bs-label">${escapeHtml(label)}</div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/* === Sprint Burndown chart (active sprint only) ===
+ *
+ * "Today" is positioned at the actual fractional time-of-day in the local
+ * timezone:
+ *   todayFrac = (now − sprintStartOfDay) / 1 day
+ */
+function burndownSection(sprint, issues) {
+  if (sprint.state !== "active") return "";
+  if (!sprint.startDate || !sprint.endDate) return "";
+  const totalItems = issues.length;
+  if (totalItems === 0) return "";
+
+  const startMs = startOfDay(sprint.startDate).getTime();
+  const endMs   = startOfDay(sprint.endDate).getTime();
+  const totalDuration = Math.max(1, (endMs - startMs) / 86400000);
+  const nowMs = Date.now();
+  const todayFrac = Math.max(0, Math.min(totalDuration, (nowMs - startMs) / 86400000));
+  const doneCount = issues.filter(isDone).length;
+
+  const resolutions = [];
+  let withDate = 0;
+  for (const issue of issues) {
+    if (!isDone(issue)) continue;
+    const rd = issue?.fields?.resolutiondate;
+    if (!rd) continue;
+    const x = (new Date(rd).getTime() - startMs) / 86400000;
+    resolutions.push(Math.max(0, Math.min(todayFrac, x)));
+    withDate++;
+  }
+  const orphan = doneCount - withDate;
+  for (let i = 0; i < orphan; i++) resolutions.push(todayFrac);
+  resolutions.sort((a, b) => a - b);
+
+  const points = [{ x: 0, y: totalItems }];
+  let remaining = totalItems;
+  for (const r of resolutions) {
+    points.push({ x: r, y: remaining });
+    remaining -= 1;
+    points.push({ x: r, y: remaining });
+  }
+  if (todayFrac > points[points.length - 1].x || resolutions.length === 0) {
+    points.push({ x: todayFrac, y: remaining });
+  }
+
+  const startDate = new Date(startMs);
+  const endDate = new Date(endMs);
+  const remainingItems = totalItems - doneCount;
+  const chartHtml = burndownSVG({
+    start: startDate, end: endDate, totalDuration, totalItems, todayFrac, doneCount, points
+  });
+
+  const startLabel = startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const endLabel = endDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  return `
+    <section class="burndown" aria-label="Sprint burndown">
+      <div class="bd-head">
+        <div class="bd-titles">
+          <div class="bd-title">Sprint Burndown <span class="bd-title-note">(work items count)</span></div>
+          <div class="bd-subtitle">${startLabel} → ${endLabel} · ${remainingItems} of ${totalItems} remaining</div>
+        </div>
+        <div class="bd-legend">
+          <span class="bd-legend-item"><span class="bd-line bd-actual"></span>Actual</span>
+          <span class="bd-legend-item"><span class="bd-line bd-ideal"></span>Ideal</span>
+          <span class="bd-legend-item"><span class="bd-line bd-trend"></span>Trend</span>
+          <span class="bd-legend-item"><span class="bd-marker bd-today"></span>Today</span>
+        </div>
+      </div>
+      <div class="bd-chart">${chartHtml}</div>
+    </section>
+  `;
+}
+
+function burndownSVG({ start, end, totalDuration, totalItems, todayFrac, doneCount, points }) {
+  const W = 1200, H = 320;
+  const padL = 56, padR = 28, padT = 24, padB = 46;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const xFor = (frac) => padL + (frac / totalDuration) * plotW;
+  const yFor = (items) => padT + (1 - items / totalItems) * plotH;
+
+  const todayX = xFor(todayFrac);
+  const todayRemaining = totalItems - doneCount;
+
+  const idealPath = `M ${xFor(0)} ${yFor(totalItems)} L ${xFor(totalDuration)} ${yFor(0)}`;
+
+  let actualPath = `M ${xFor(points[0].x)} ${yFor(points[0].y)}`;
+  for (let i = 1; i < points.length; i++) {
+    actualPath += ` L ${xFor(points[i].x)} ${yFor(points[i].y)}`;
+  }
+
+  let trendPath = "";
+  if (todayFrac > 0) {
+    const ratePerDay = doneCount / todayFrac;
+    const remainingDaysLeft = totalDuration - todayFrac;
+    const projected = Math.max(0, todayRemaining - ratePerDay * remainingDaysLeft);
+    trendPath = `M ${todayX} ${yFor(todayRemaining)} L ${xFor(totalDuration)} ${yFor(projected)}`;
+  }
+
+  const totalDaysCeil = Math.ceil(totalDuration);
+  const tickIdxs = new Set();
+  tickIdxs.add(0);
+  tickIdxs.add(totalDaysCeil);
+  const targetTicks = totalDaysCeil <= 7 ? totalDaysCeil + 1 : 7;
+  if (targetTicks > 2 && totalDaysCeil > 0) {
+    for (let i = 1; i < targetTicks - 1; i++) {
+      tickIdxs.add(Math.round(i * totalDaysCeil / (targetTicks - 1)));
+    }
+  }
+  const ticks = Array.from(tickIdxs).filter(t => t >= 0 && t <= totalDaysCeil).sort((a, b) => a - b);
+  const xTicks = ticks.map((dayIdx) => {
+    const date = new Date(start.getTime() + dayIdx * 86400000);
+    const wd = date.toLocaleDateString(undefined, { weekday: "short" });
+    const day = date.getDate();
+    return `<g><line x1="${xFor(dayIdx)}" y1="${padT + plotH}" x2="${xFor(dayIdx)}" y2="${padT + plotH + 4}" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+      <text x="${xFor(dayIdx)}" y="${padT + plotH + 22}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="11" font-weight="500" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">${wd} ${day}</text></g>`;
+  }).join("");
+
+  const yLabels = `
+    <text x="${padL - 10}" y="${yFor(totalItems)}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,0.7)" font-size="11" font-weight="600">${totalItems}</text>
+    <text x="${padL - 10}" y="${yFor(0)}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,0.7)" font-size="11" font-weight="600">0</text>
+  `;
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: auto; display: block; max-height: 320px;">
+    <defs>
+      <pattern id="bd-hatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,255,255,0.06)" stroke-width="3"/>
+      </pattern>
+    </defs>
+    <rect x="${padL}" y="${padT}" width="${Math.max(0, todayX - padL)}" height="${plotH}" fill="url(#bd-hatch)"/>
+    <line x1="${padL}" y1="${yFor(totalItems)}" x2="${padL + plotW}" y2="${yFor(totalItems)}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+    <line x1="${padL}" y1="${yFor(0)}" x2="${padL + plotW}" y2="${yFor(0)}" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+    ${yLabels}
+    <line x1="${todayX}" y1="${padT - 4}" x2="${todayX}" y2="${padT + plotH + 4}" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+    <path d="${idealPath}" stroke="#60a5fa" stroke-width="2" stroke-dasharray="6 5" fill="none" opacity="0.7"/>
+    ${trendPath ? `<path d="${trendPath}" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4 4" fill="none" opacity="0.55"/>` : ""}
+    <path d="${actualPath}" stroke="#fbbf24" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${todayX}" cy="${yFor(todayRemaining)}" r="5" fill="#fbbf24" stroke="#0b1f44" stroke-width="2"/>
+    ${xTicks}
+  </svg>`;
+}
+
+function paginationHtml(total, page) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(total, safePage * PAGE_SIZE);
+
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (safePage > 3) pages.push("…");
+    const lo = Math.max(2, safePage - 1);
+    const hi = Math.min(totalPages - 1, safePage + 1);
+    for (let i = lo; i <= hi; i++) pages.push(i);
+    if (safePage < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
+  }
+
+  const numHtml = pages.map(p => {
+    if (p === "…") return `<span class="page-ellipsis">…</span>`;
+    return `<button class="page-btn ${p === safePage ? "active" : ""}" data-page="${p}" ${p === safePage ? "disabled" : ""}>${p}</button>`;
+  }).join("");
+
+  return `
+    <div class="pagination">
+      <div class="info">Showing <strong>${start}–${end}</strong> of <strong>${total}</strong> work item${total===1?"":"s"}</div>
+      <div class="page-controls">
+        <button class="page-btn icon" data-page="prev" ${safePage <= 1 ? "disabled" : ""} title="Previous page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        ${numHtml}
+        <button class="page-btn icon" data-page="next" ${safePage >= totalPages ? "disabled" : ""} title="Next page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function attachPaginationHandlers(total) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  root.querySelectorAll(".pagination .page-btn[data-page]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.getAttribute("data-page");
+      if (v === "prev") state.currentPage = Math.max(1, state.currentPage - 1);
+      else if (v === "next") state.currentPage = Math.min(totalPages, state.currentPage + 1);
+      else state.currentPage = parseInt(v, 10) || 1;
+      renderContent();
+      const t = root.querySelector(".table-card");
+      if (t) t.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+}
+
+function renderContent() {
+  if (!state.sprints.length) {
+    $("content").innerHTML = `<div class="empty">This project has no issues assigned to a sprint yet. Pick another project, or check that it uses a Scrum board.</div>`;
+    return;
+  }
+  const sprint = state.sprints.find(s => String(s.id) === String(state.selectedSprintId)) || state.sprints[0];
+  const issues = sprint.issues || [];
+  const total = issues.length;
+  const done = issues.filter(isDone).length;
+  const inProgress = issues.filter(isInProgress).length;
+  const todo = total - done - inProgress;
+  const pctDone = total ? Math.round((done / total) * 100) : 0;
+
+  const closed = state.sprints.filter(s => s.state === "closed");
+  const closedCounts = closed.map(s => s.issues.filter(isDone).length);
+  const avgCompleted = closedCounts.length ? closedCounts.reduce((a, b) => a + b, 0) / closedCounts.length : null;
+
+  let healthHtml = "";
+  let pctTime = 0, remaining = 0, totalDays = 0;
+  if (sprint.startDate && sprint.endDate) {
+    const start = new Date(sprint.startDate);
+    const end = new Date(sprint.endDate);
+    const now = new Date();
+    totalDays = Math.max(1, daysBetween(start, end));
+    /* Derive remaining from elapsed so the two always sum to totalDays.
+     * Previously we computed remaining as round(now → end), which double-rounded
+     * against round(start → now) and could give e.g. elapsed=1 + remaining=5
+     * for a 5-day sprint (sum 6) — the user-reported "5 days remaining" bug
+     * on day 2 of a 5-day sprint. */
+    const elapsed = Math.min(totalDays, Math.max(0, daysBetween(start, now)));
+    remaining = Math.max(0, totalDays - elapsed);
+    pctTime = Math.min(100, Math.round((elapsed / totalDays) * 100));
+  }
+  let healthStatus = "muted", healthLabel = "Not started", timeBarClass = "";
+  if (sprint.state === "active") {
+    const drift = pctTime - pctDone;
+    if (drift > 25) { healthStatus = "danger"; healthLabel = "At Risk"; timeBarClass = "danger"; }
+    else if (drift > 10) { healthStatus = "warn"; healthLabel = "Watch"; timeBarClass = "warn"; }
+    else { healthStatus = "good"; healthLabel = "On Track"; }
+  } else if (sprint.state === "closed") {
+    healthStatus = pctDone === 100 ? "good" : "warn";
+    healthLabel = pctDone === 100 ? "Sprint Closed · Complete" : "Sprint Closed";
+  } else {
+    healthStatus = "muted"; healthLabel = "Future Sprint";
+  }
+  const healthIcons = {
+    good: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>`,
+    warn: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.86l-8.5 14.7A2 2 0 003.5 22h17a2 2 0 001.7-3.4l-8.5-14.7a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    danger: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+    muted: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  };
+  const healthIcon = healthIcons[healthStatus];
+
+  if (sprint.startDate && sprint.endDate) {
+    healthHtml = `
+      <div class="health-status ${healthStatus}">${healthIcon}<span>${escapeHtml(healthLabel)}</span></div>
+      <div class="health-meta">${remaining} day${remaining===1?"":"s"} remaining · ${totalDays}-day sprint</div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="lbl"><span>Work completed</span><strong>${pctDone}%</strong></div>
+          <div class="bar"><span class="work" style="width:${pctDone}%"></span></div>
+        </div>
+        <div class="bar-row">
+          <div class="lbl"><span>Time elapsed</span><strong>${pctTime}%</strong></div>
+          <div class="bar"><span class="time ${timeBarClass}" style="width:${pctTime}%"></span></div>
+        </div>
+      </div>
+      <div class="health-foot">${fmtDateShort(sprint.startDate)} → ${fmtDateShort(sprint.endDate)}</div>
+    `;
+  } else {
+    healthHtml = `
+      <div class="health-status muted">${healthIcons.muted}<span>No dates set</span></div>
+      <div class="health-meta">This sprint does not have a start or end date configured.</div>
+    `;
+  }
+
+  let velHtml;
+  if (sprint.state === "active") {
+    if (avgCompleted == null) {
+      velHtml = `<div class="velocity-num">—</div>
+        <div class="velocity-unit">no historical sprints yet</div>
+        <div class="velocity-note">Need at least one closed sprint in this project to estimate an average.</div>`;
+    } else {
+      const projected = Math.min(total, Math.max(done, Math.round(avgCompleted)));
+      const shortfall = Math.max(0, total - projected);
+      const noteCls = shortfall === 0 ? "good" : shortfall > total * 0.3 ? "warn" : "";
+      const verdict = total === 0
+        ? `No issues in this sprint.`
+        : shortfall === 0
+          ? `On pace to clear all <strong>${total}</strong> issues based on an average of <strong>${avgCompleted.toFixed(1)}</strong> issues/sprint.`
+          : `Likely shortfall of <strong>${shortfall}</strong> issue${shortfall===1?"":"s"} based on an average of <strong>${avgCompleted.toFixed(1)}</strong> issues/sprint.`;
+      velHtml = `<div class="velocity-num">${avgCompleted.toFixed(1)}</div>
+        <div class="velocity-unit">per sprint, n=${closedCounts.length}</div>
+        <div class="velocity-note ${noteCls}">${verdict}</div>`;
+    }
+  } else if (sprint.state === "closed") {
+    velHtml = `<div class="velocity-num">${done}<span style="color:var(--text-muted); font-size: 22px;"> / ${total}</span></div>
+      <div class="velocity-unit">final completion</div>
+      ${avgCompleted != null ? `<div class="velocity-note">Project average: <strong>${avgCompleted.toFixed(1)}</strong> issues completed per sprint, n=${closedCounts.length}.</div>` : ""}`;
+  } else {
+    velHtml = `<div class="velocity-num">${avgCompleted != null ? Math.round(avgCompleted) : "—"}</div>
+      <div class="velocity-unit">forecast issues to complete</div>
+      <div class="velocity-note">Sprint hasn't started. Forecast based on historical average${avgCompleted != null ? ` of ${avgCompleted.toFixed(1)} issues/sprint.` : "."}</div>`;
+  }
+
+  const stateLabel = sprint.state === "active" ? "Active Sprint" : sprint.state === "closed" ? "Completed Sprint" : "Future Sprint";
+  const heroDates = (sprint.startDate && sprint.endDate)
+    ? `${fmtDateShort(sprint.startDate)} – ${fmtDateShort(sprint.endDate)}`
+    : "Dates not set";
+  const heroTimeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const heroClockIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  const heroDaysItem = sprint.state === "active" ? `<span class="item">${heroClockIcon}${remaining} day${remaining===1?"":"s"} left</span>` :
+                       sprint.state === "future" && sprint.startDate ? `<span class="item">${heroClockIcon}Starts ${fmtDateShort(sprint.startDate)}</span>` :
+                       sprint.state === "closed" && sprint.endDate ? `<span class="item">${heroClockIcon}Ended ${fmtDateShort(sprint.endDate)}</span>` : "";
+
+  const trimmedGoal = (sprint.goal || "").trim();
+  const goalHtml = trimmedGoal
+    ? `<div class="goal" title="${escapeHtml(trimmedGoal)}"><span class="goal-label">Goal:</span>${escapeHtml(trimmedGoal)}</div>`
+    : `<div class="goal empty"><span class="goal-label">Goal:</span><em>No goal set for this sprint</em></div>`;
+
+  const projectName = state.projects.find(p => p.key === state.selectedProjectKey)?.name || state.selectedProjectKey;
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  if (state.currentPage < 1) state.currentPage = 1;
+  const pageStart = (state.currentPage - 1) * PAGE_SIZE;
+  const pageIssues = issues.slice(pageStart, pageStart + PAGE_SIZE);
+
+  $("content").innerHTML = `
+    <div class="kpi-grid">
+      <div class="hero">
+        <span class="hero-tag ${sprint.state}"><span class="pulse"></span>${escapeHtml(stateLabel)}</span>
+        <h2 title="${escapeHtml(sprint.name)}">${escapeHtml(sprint.name)}</h2>
+        ${goalHtml}
+        <div class="hero-meta">
+          <span class="item">${heroTimeIcon}${heroDates}</span>
+          ${heroDaysItem}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Completion</div>
+        <div class="donut-row">
+          <div class="donut-stack">
+            <div class="donut-canvas-wrap">
+              <canvas id="donut"></canvas>
+              <div class="donut-center">
+                <div class="pct">${pctDone}%</div>
+              </div>
+            </div>
+            <div class="donut-frac">${done}/${total} done</div>
+          </div>
+          <div class="legend">
+            <div class="item"><span class="dot" style="background:#16a34a"></span>Done · <strong>${done}</strong></div>
+            <div class="item"><span class="dot" style="background:#2563eb"></span>In progress · <strong>${inProgress}</strong></div>
+            <div class="item"><span class="dot" style="background:#cbd5e1"></span>To do · <strong>${todo}</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Sprint Health</div>
+        ${healthHtml}
+      </div>
+
+      <div class="card">
+        <div class="card-title">Average Work Completed</div>
+        ${velHtml}
+      </div>
+    </div>
+
+    ${backlogSummaryHtml(issues)}
+
+    ${burndownSection(sprint, issues)}
+
+    <div class="section-head">
+      <h2>${escapeHtml(projectName)} · Work Items <span class="count">${total} item${total===1?"":"s"}</span></h2>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">Key</th>
+            <th style="width:150px;">Priority</th>
+            <th style="width:60px;">Type</th>
+            <th>Title</th>
+            <th style="width:140px;">Status</th>
+            <th style="width:240px;">Assignee</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pageIssues.length === 0 ? `<tr><td colspan="6" style="text-align:center; padding: 32px; color: var(--text-muted);">No work items in this sprint.</td></tr>` :
+            pageIssues.map(it => {
+              const f = it.fields || {};
+              const link = `https://${SITE_HOST}/browse/${escapeHtml(it.key)}`;
+              return `<tr>
+                <td><a href="${link}" target="_blank" rel="noopener" class="issue-key">${escapeHtml(it.key)}</a></td>
+                <td>${priorityCell(f.priority)}</td>
+                <td>${issueTypeIcon(f.issuetype?.name)}</td>
+                <td><span class="issue-title">${escapeHtml(f.summary || "")}</span></td>
+                <td>${statusPill(it)}</td>
+                <td>${assigneeCell(f.assignee)}</td>
+              </tr>`;
+            }).join("")}
+        </tbody>
+      </table>
+      ${total > 0 ? paginationHtml(total, state.currentPage) : ""}
+    </div>
+  `;
+
+  if (total > 0) attachPaginationHandlers(total);
+
+  const ctx = root.getElementById("donut");
+  if (ctx && window.Chart) {
+    new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: ["Done", "In Progress", "To Do"],
+        datasets: [{
+          data: total === 0 ? [0, 0, 1] : [done, inProgress, todo],
+          backgroundColor: total === 0 ? ["#e2e8f0", "#e2e8f0", "#e2e8f0"] : ["#16a34a", "#2563eb", "#cbd5e1"],
+          borderWidth: 0,
+          hoverOffset: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true, cutout: "72%",
+        plugins: { legend: { display: false }, tooltip: { enabled: total > 0 } },
+        animation: { animateRotate: true, duration: 600 },
+      },
+    });
+  }
+}
+
+$("projectSelect").addEventListener("change", (e) => { state.selectedProjectKey = e.target.value; state.currentPage = 1; setNote(""); notifyContext(e.target.value); loadIssuesForProject(state.selectedProjectKey); });
+$("sprintSelect").addEventListener("change", (e) => { state.selectedSprintId = e.target.value; state.currentPage = 1; renderContent(); });
+$("refreshBtn").addEventListener("click", async () => { setError(""); await loadProjects(); });
+
+  async function activate(params){
+    if (params && params.projectKey) pendingProjectKey = params.projectKey;
+    // Every activation does the SAME full reload as the Refresh button (load projects ->
+    // pick the carried project -> fetch its sprints), so navigating in always matches Refresh.
+    __inited = true;
+    setError("");
+    await loadProjects();
+  }
+  return { activate, refresh: async () => { setError(""); await loadProjects(); }, deactivate: () => {} };
+}
+
+
+(function(){
+  const LEVELS = ["portfolio","backlog","sprint"];
+  const CLOUD_ID = "YOUR_CLOUD_ID";
+  const GVP = "mcp__YOUR_CONNECTOR_ID__getVisibleJiraProjects";
+  const context = { key:null, name:null };
+  let currentLevel = "portfolio";
+
+  const navBtns = Array.from(document.querySelectorAll("#levelnav button"));
+  const connBadge = document.getElementById("connBadge");
+  const connLabel = document.getElementById("connLabel");
+  const connReconnect = document.getElementById("connReconnect");
+
+  const shell = {
+    drill(key, name, level){ context.key = key; context.name = name; show(level, { projectKey:key }); },
+    setProjectContext(key, name){ context.key = key; context.name = name || key; },
+    clearProjectContext(){ context.key = null; context.name = null; },
+    reportConnection(ok){ setConn(ok ? "connected" : "disconnected"); if (ok){ const bb = document.getElementById("bridgeBanner"); if (bb) bb.remove(); } },
+    goTo(level){ show(level); }
+  };
+
+  function build(level, factory){
+    const host = document.getElementById("view-" + level);
+    const root = host.attachShadow({ mode:"open" });
+    root.appendChild(document.getElementById("tpl-" + level).content.cloneNode(true));
+    return factory(root, host, shell);
+  }
+  const views = {
+    portfolio: build("portfolio", createPortfolioView),
+    backlog:   build("backlog",   createBacklogView),
+    sprint:    build("sprint",    createSprintView)
+  };
+
+  function show(level, params){
+    // Stop the outgoing view's background work so it doesn't hog the shared call-queue.
+    if (currentLevel && currentLevel !== level && views[currentLevel] && views[currentLevel].deactivate) views[currentLevel].deactivate();
+    LEVELS.forEach(l => { document.getElementById("view-" + l).hidden = (l !== level); });
+    currentLevel = level;
+    navBtns.forEach(b => b.classList.toggle("active", b.dataset.level === level));
+    let p = params;
+    if (!p && level !== "portfolio" && context.key) p = { projectKey: context.key };
+    views[level].activate(p);
+  }
+  navBtns.forEach(b => b.addEventListener("click", () => show(b.dataset.level)));
+
+  // ---- connection badge + bridge handling ----
+  function bridgeReady(){ return !!(window.cowork && window.cowork.callMcpTool); }
+  function setConn(state){
+    connBadge.setAttribute("data-state", state);
+    connLabel.textContent = state === "connected" ? "Connected" : state === "checking" ? "Checking…" : "Disconnected";
+    connReconnect.hidden = (state !== "disconnected");
+  }
+  // No separate probe call (a maxResults:1 probe was polluting the shared read-cache so
+  // Portfolio's real load returned only 1 project). Connection status is derived from
+  // Portfolio's own getVisibleJiraProjects load via shell.reportConnection().
+  function recheckConnection(){
+    setConn("checking");
+    if (!bridgeReady()){ setConn("disconnected"); return; }
+    if (views.portfolio && views.portfolio.refresh) views.portfolio.refresh();
+  }
+  function showBridgeBanner(){
+    if (document.getElementById("bridgeBanner")) return;
+    const b = document.createElement("div");
+    b.id = "bridgeBanner";
+    b.style.cssText = "max-width:1320px;margin:14px auto 0;padding:13px 16px;border-radius:12px;background:#fef3c7;border:1px solid #fde68a;color:#7a5d00;font-size:13px;line-height:1.55;font-weight:500;";
+    b.innerHTML = "<b>Can't reach the Jira connector.</b> This dashboard needs the Cowork \u2194 Jira bridge, which only exists when it runs as a <b>live artifact inside Cowork</b>. Open it from the artifacts panel in the Cowork sidebar (not the raw HTML file), and make sure your Atlassian / Jira connector is authorized.";
+    const body = document.querySelector(".app-body");
+    body.parentNode.insertBefore(b, body);
+  }
+  connReconnect.addEventListener("click", () => {
+    if (typeof window.sendPrompt === "function"){
+      window.sendPrompt("My Atlassian Jira connector for the Ultimate Jira Projects Dashboard looks disconnected. Please help me reconnect / re-authorize it.");
+    } else {
+      showBridgeBanner();
+    }
+    recheckConnection();
+  });
+
+  // Serialize ALL connector calls app-wide. The source dashboards warn that concurrent
+  // calls to the same MCP tool collide in the read cache and return each other's results.
+  // In the combined app Portfolio auto-loads its searches on startup, so opening the Sprint
+  // tab fired searchJiraIssuesUsingJql WHILE Portfolio's calls were in flight -> Sprint got a
+  // colliding/empty result and showed "no sprints". One-at-a-time removes the race entirely.
+  function installSerialization(){
+    if (window.__mcpSerialized) return;
+    if (!(window.cowork && window.cowork.callMcpTool)) return;
+    window.__mcpSerialized = true;
+    const orig = window.cowork.callMcpTool.bind(window.cowork);
+    let chain = Promise.resolve();
+    window.cowork.callMcpTool = function(name, args){
+      const run = () => orig(name, args);
+      const p = chain.then(run, run);
+      chain = p.then(() => {}, () => {});
+      return p;
+    };
+  }
+  function bootstrap(){
+    if (bridgeReady()){ installSerialization(); setConn("checking"); show("portfolio"); return; }
+    let waited = 0;
+    const iv = setInterval(() => {
+      waited += 200;
+      if (bridgeReady()){ clearInterval(iv); installSerialization(); const bb = document.getElementById("bridgeBanner"); if (bb) bb.remove(); setConn("checking"); show("portfolio"); }
+      else if (waited >= 12000){ clearInterval(iv); setConn("disconnected"); show("portfolio"); showBridgeBanner(); }
+    }, 200);
+  }
+  bootstrap();
+})();
+
+</script>
+</body>
+</html>
