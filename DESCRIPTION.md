@@ -4,19 +4,15 @@ Copy‑ready descriptions for the artifact (GitHub “About”, artifact subtitl
 
 ---
 
-## Overall
+## Overview
 
-**One‑liner**
-
-> A live, three‑level Jira dashboard for product & project managers — portfolio, backlog, and sprint health in one place.
-
-**Short paragraph**
-
-> The Ultimate Jira Projects Dashboard brings three levels of Jira health into a single live view: high‑level **Portfolio** health across many projects, mid‑level **Product Backlog** flow and delivery health, and detailed **Sprint** health. Pick a project once and it carries through the tabs, so you can go from a portfolio‑wide overview down to a specific sprint in two clicks.
-
-**Longer paragraph** (for a README intro or listing)
-
-> A single, self‑contained dashboard that unifies portfolio, backlog, and sprint reporting for Jira. Navigate three drill‑down levels — from a multi‑project portfolio overview, to backlog flow, fix‑version release progress and lead/cycle time, down to an active sprint’s burndown and velocity forecast. Selecting a project on the Portfolio tab pre‑fills the Backlog and Sprint tabs, and non‑Scrum projects are handled gracefully. Runs as a Claude Cowork live artifact against your connected Atlassian/Jira account.
+The Ultimate Jira Projects Dashboard is a live, three‑level view of Jira health for product and
+project managers. It unifies **Portfolio** health across many projects, **Product Backlog** flow and
+delivery health, and detailed **Sprint** health — from a multi‑project overview, to backlog flow,
+fix‑version release progress and lead/cycle time, down to an active sprint’s burndown and velocity
+forecast. Pick a project once and it carries through the tabs, so you can go from a portfolio‑wide
+overview to a specific sprint in two clicks; non‑Scrum projects are handled gracefully. Runs as a
+Claude Cowork live artifact against your connected Atlassian/Jira account.
 
 ---
 
