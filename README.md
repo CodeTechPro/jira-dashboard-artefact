@@ -17,8 +17,7 @@ fresh data from your connected Atlassian/Jira account every time you open it.
 - One shared header with a connection badge, left‑aligned level tabs, and a consistent controls card on every tab.
 - **Click‑to‑drill / cross‑tab context:** pick a project on Portfolio and it carries into the Backlog and Sprint tabs.
 - Graceful handling when a carried project isn’t a Scrum/software project (Sprint shows a note and falls back).
-- **Always‑fresh data:** every tab switch re‑fetches; queries are cache‑busted; a tab’s background work is cancelled when you leave it.
-- Each level is CSS‑isolated in its own Shadow DOM view, so their styles never collide.
+- **Always‑fresh data:** every tab switch re‑fetches, so what you see is current.
 - Charts via Chart.js (loaded from CDN).
 
 ---
@@ -28,7 +27,6 @@ fresh data from your connected Atlassian/Jira account every time you open it.
 - The whole app is one file: **`index.html`** (HTML + CSS + JS, no build step).
 - It calls Jira through Cowork’s connector bridge — `window.cowork.callMcpTool(name, args)` —
   **not** a hard‑coded API key. Authentication happens once, when you connect Jira inside Cowork (OAuth).
-- All connector calls are serialized (one at a time) and cache‑busted so tabs are always up to date.
 
 Because it relies on `window.cowork`, the dashboard only shows live data **when opened as a live
 artifact inside Cowork**. Opening the raw `index.html` in a normal browser will show a “can’t reach
@@ -66,8 +64,7 @@ inline `<script>`, and the tool list is declared in the `cowork-artifact-meta` b
 | `SITE_HOST` | Your Jira site host (used to build issue links) | `your-company.atlassian.net` |
 | `mcp__<server-id>__...` | The ID of *your* connected Atlassian connector in Cowork | `mcp__YOUR_CONNECTOR_ID__...` |
 
-> These identifiers are specific to your Jira instance. If you publish a fork, swap them back to the
-> placeholders above (and never commit a real API token) so you don't expose your own tenant.
+> If you publish a fork, swap these identifiers back to the placeholders above so you don't expose your own tenant.
 
 **Find your Cloud ID:** while logged into Jira, open
 `https://<your-site>.atlassian.net/_edge/tenant_info` — the `cloudId` field is the value you need.
@@ -83,29 +80,6 @@ The connector tools this dashboard uses (declared in `cowork-artifact-meta`):
 - `getVisibleJiraProjects`
 - `searchJiraIssuesUsingJql`
 - `getJiraIssue`
-
----
-
-## Where does an API token go?
-
-**As shipped, this dashboard does not use — and must not contain — an API token.** Auth is handled
-by Cowork’s Jira connector (OAuth). There is nothing secret to paste into the HTML for the normal
-Cowork use case.
-
-You only need a **Jira API token** if you fork this to call the Jira REST API **directly** (for
-example, to run it as a standalone web page outside Cowork). In that case:
-
-1. Create a token at **https://id.atlassian.com/manage-profile/security/api-tokens**.
-2. Add a small config block near the top of your script and reference it in your own `fetch()` /
-   Authorization header — **using placeholders, never your real token in the committed file**:
-
-   ```js
-   // --- Direct Jira REST API config (only if you adapt this outside Cowork) ---
-   const JIRA_EMAIL     = "YOUR_ATLASSIAN_EMAIL";      // e.g. you@company.com
-   const JIRA_API_TOKEN = "YOUR_JIRA_API_TOKEN";       // ⚠️ never commit the real value
-   const SITE_HOST      = "your-company.atlassian.net";
-   // Authorization: 'Basic ' + btoa(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`)
-   ```
 
 ---
 
