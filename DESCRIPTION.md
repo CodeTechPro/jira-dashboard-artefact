@@ -1,9 +1,5 @@
 # Ultimate Jira Projects Dashboard — Description
 
-Copy‑ready descriptions for the artifact (GitHub “About”, artifact subtitle, docs, etc.).
-
----
-
 ## Overview
 
 The Ultimate Jira Projects Dashboard is a live, three‑level view of Jira health for product and
