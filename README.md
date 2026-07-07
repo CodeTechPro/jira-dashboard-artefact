@@ -24,7 +24,7 @@ fresh data from your connected Atlassian/Jira account every time you open it.
 
 ## How it works
 
-- The whole app is one file: **`index.html`** (HTML + CSS + JS, no build step).
+- The whole app is one file: **`Live Artefact/index.html`** (HTML + CSS + JS, no build step).
 - It calls Jira through Cowork’s connector bridge — `window.cowork.callMcpTool(name, args)` —
   **not** a hard‑coded API key. Authentication happens once, when you connect Jira inside Cowork (OAuth).
 
@@ -45,7 +45,7 @@ the Jira connector” banner (there’s no bridge outside Cowork).
 ## Quick start
 
 1. **Fork / clone** this repo.
-2. Open `index.html` and set the [configuration values](#configuration) for your Jira instance.
+2. Open `Live Artefact/index.html` and set the [configuration values](#configuration) for your Jira instance.
 3. In Claude Cowork, add it as a live artifact (or ask Cowork to open/recreate the artifact from this file).
 4. Make sure your **Atlassian/Jira connector is connected** in Cowork.
 5. Open the artifact from the Cowork sidebar → the connection badge should read **Connected**.
@@ -55,7 +55,7 @@ the Jira connector” banner (there’s no bridge outside Cowork).
 
 ## Configuration
 
-Open `index.html` and update these **instance‑specific values** (they appear near the top of the
+Open `Live Artefact/index.html` and update these **instance‑specific values** (they appear near the top of the
 inline `<script>`, and the tool list is declared in the `cowork-artifact-meta` block at the very top):
 
 | Value | What it is | Example / placeholder |
@@ -108,23 +108,23 @@ trademark of Atlassian.
 
 ## Screenshots
 
-A per‑tab walkthrough with copy‑ready descriptions lives in [DESCRIPTION.md](DESCRIPTION.md).
+A per‑tab walkthrough with copy‑ready descriptions lives in [DESCRIPTION.md](Live%20Artefact/DESCRIPTION.md).
 Data shown below is from a demo Jira instance.
 
 ### 1 · Portfolio Health
 
 Multi‑project scorecards — completion donut, status split, and per‑type panels (Epics, Stories, Tasks, Bugs) for each selected project.
 
-![Portfolio Health tab](jira-portfolio-health.png)
+![Portfolio Health tab](Screenshot/jira-portfolio-health.png)
 
 ### 2 · Product Backlog Health
 
 Flow health for one project — completion, created vs. resolved throughput, cumulative flow trend, and release progress by Fix Version.
 
-![Product Backlog Health tab](jira-backlog-health.png)
+![Product Backlog Health tab](Screenshot/jira-backlog-health.png)
 
 ### 3 · Sprint Health
 
 A single sprint in detail — active‑sprint hero, completion, on‑track read, velocity forecast, burndown, and the work‑items table.
 
-![Sprint Health tab](jira-sprint-health.png)
+![Sprint Health tab](Screenshot/jira-sprint-health.png)

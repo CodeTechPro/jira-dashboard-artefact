@@ -14,7 +14,7 @@ Claude Cowork live artifact against your connected Atlassian/Jira account.
 
 ## Tab 1 — Portfolio Health
 
-![Portfolio Health — per-project completion donuts and Epic/Story/Task/Bug breakdowns for the selected projects](jira-portfolio-health.png)
+![Portfolio Health — per-project completion donuts and Epic/Story/Task/Bug breakdowns for the selected projects](../Screenshot/jira-portfolio-health.png)
 
 > **High‑level, multi‑project overview.** Pick one or more projects and get a scorecard for each: an overall completion donut (Done / In Progress / To Do) with counts and percentages, board and work‑item totals, and per‑type panels for Epics, Stories, Tasks, and Bugs. From any project card you can jump straight into its Backlog or Sprint health.
 
@@ -22,7 +22,7 @@ Claude Cowork live artifact against your connected Atlassian/Jira account.
 
 ## Tab 2 — Product Backlog Health
 
-![Product Backlog Health — completion, flow health, throughput, cumulative created-vs-resolved trend, and release progress by Fix Version](jira-backlog-health.png)
+![Product Backlog Health — completion, flow health, throughput, cumulative created-vs-resolved trend, and release progress by Fix Version](../Screenshot/jira-backlog-health.png)
 
 > **Mid‑level delivery and flow health for one project.** Choose a project and a time window (2 weeks / 1 / 3 / 6 months). See a completion donut for work created in the period, flow health (created vs. resolved and net flow) and throughput, a cumulative created‑vs‑resolved trend, release progress by Fix Version, lead‑ and cycle‑time analysis, and a paginated work‑items table.
 
@@ -32,7 +32,7 @@ Claude Cowork live artifact against your connected Atlassian/Jira account.
 
 ## Tab 3 — Sprint Health
 
-![Sprint Health — active-sprint hero, completion, sprint health, velocity forecast, burndown chart, and work-items table](jira-sprint-health.png)
+![Sprint Health — active-sprint hero, completion, sprint health, velocity forecast, burndown chart, and work-items table](../Screenshot/jira-sprint-health.png)
 
 > **Detailed view of a single sprint.** Select a project and a sprint (active / future / completed). The active‑sprint hero shows the goal and dates, alongside a completion donut, a sprint‑health read (work completed vs. time elapsed → On Track / Watch / At Risk), and a velocity forecast based on past sprints. Below: the sprint backlog by issue type, a burndown chart (actual vs. ideal, with trend and “today” marker), and a paginated work‑items table.
 
