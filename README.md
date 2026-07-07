@@ -10,8 +10,6 @@ drill‑down levels of Jira health in one place:
 It’s designed to run as a **live artifact inside [Claude Cowork](https://claude.com/)**, pulling
 fresh data from your connected Atlassian/Jira account every time you open it.
 
-> ⚠️ **Read the [Security](#-security--before-you-push-to-a-public-repo) section before you push this to a public GitHub repo.** The working copy contains identifiers for *your* Jira instance that you should replace with placeholders first.
-
 ---
 
 ## Features
@@ -68,6 +66,9 @@ inline `<script>`, and the tool list is declared in the `cowork-artifact-meta` b
 | `SITE_HOST` | Your Jira site host (used to build issue links) | `your-company.atlassian.net` |
 | `mcp__<server-id>__...` | The ID of *your* connected Atlassian connector in Cowork | `mcp__YOUR_CONNECTOR_ID__...` |
 
+> These identifiers are specific to your Jira instance. If you publish a fork, swap them back to the
+> placeholders above (and never commit a real API token) so you don't expose your own tenant.
+
 **Find your Cloud ID:** while logged into Jira, open
 `https://<your-site>.atlassian.net/_edge/tenant_info` — the `cloudId` field is the value you need.
 
@@ -112,49 +113,6 @@ example, to run it as a standalone web page outside Cowork). In that case:
 
 ---
 
-## 🔐 Security — before you push to a public repo
-
-Treat the following as **sensitive** and scrub them before publishing:
-
-- `JIRA_API_TOKEN` (if you added one) — **highest priority; a leaked token can act as you.**
-- `CLOUD_ID` — identifies your Atlassian tenant.
-- `SITE_HOST` — your Jira site.
-- The `mcp__<connector-id>__...` server ID.
-
-### Recommended workflow
-
-1. **Keep your real, working file private.** Save your configured copy as `index.local.html`
-   (or `.env`‑style values) that never gets committed.
-2. **Commit a placeholder version.** In the committed `index.html`, replace real values with
-   placeholders: `YOUR_CLOUD_ID`, `your-company.atlassian.net`, `YOUR_JIRA_API_TOKEN`,
-   `mcp__YOUR_CONNECTOR_ID__...`.
-3. **Add a `.gitignore`** so local copies and secrets never get pushed:
-
-   ```gitignore
-   # Local, configured copies — never commit
-   *.local.html
-   .env
-   .env.*
-   secrets.*
-   ```
-
-4. **Pre‑push checklist** — run these and confirm they return nothing before pushing:
-
-   ```bash
-   # Should print NOTHING if you sanitized correctly
-   git grep -nE "atlassian\.net|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|API_TOKEN|ATATT" -- . ':!README.md'
-   ```
-
-   (`ATATT` is the prefix of Atlassian API tokens; the UUID pattern catches Cloud IDs.)
-
-5. If you ever commit a real token by accident, **revoke it immediately** in your Atlassian API‑token
-   settings and rotate it — deleting the commit is not enough once it’s public.
-
-> Note: GitHub push protection and secret scanning may catch some of these automatically, but do
-> **not** rely on it. Scrub first.
-
----
-
 ## Customizing
 
 - **Change which projects/period load by default** — see the query‑building code in each view.
@@ -167,9 +125,7 @@ Treat the following as **sensitive** and scrub them before publishing:
 ## License
 
 Released under the [MIT License](LICENSE) — you're free to use, modify, and redistribute it,
-including in your own forks and internal tools. Keep the copyright notice, and remember to scrub
-your own Jira identifiers (see [Security](#-security--before-you-push-to-a-public-repo)) before
-publishing a fork.
+including in your own forks and internal tools. Keep the copyright notice.
 
 ---
 
