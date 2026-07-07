@@ -41,4 +41,3 @@ Claude Cowork live artifact against your connected Atlassian/Jira account.
 ## Notes
 
 - Runs as a **Claude Cowork live artifact** and pulls live data through your connected Atlassian/Jira account.
-- Not affiliated with or endorsed by Atlassian. “Jira” is a trademark of Atlassian.
